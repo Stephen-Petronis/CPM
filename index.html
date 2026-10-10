@@ -146,40 +146,97 @@ function drawCar(cx,cy,body,glass='#8fe3ff'){
   ctx.fillStyle='#ffd23f';ctx.fillRect(x+1,y,2,1);ctx.fillRect(x+9,y,2,1);
 }
 
-/* ---------- sound ---------- */
-let ac=null;
-function audioInit(){if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(ac&&ac.state==='suspended')ac.resume();}
-function tone(f,d=.08,type='square',vol=.05,slide=0){
-  if(!ac||G.mute)return;
-  try{const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
+/* ---------- sound: chiptune synth, effects and music ---------- */
+let ac=null,sfxBus=null,musBus=null,noiseBuf=null;
+function audioInit(){
+  if(!ac){try{
+    ac=new(window.AudioContext||window.webkitAudioContext)();
+    sfxBus=ac.createGain();sfxBus.gain.value=1;sfxBus.connect(ac.destination);
+    musBus=ac.createGain();musBus.gain.value=.55;musBus.connect(ac.destination);
+    noiseBuf=ac.createBuffer(1,ac.sampleRate,ac.sampleRate);const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  }catch(e){ac=null;}}
+  // let sound play even with the iPhone silent switch on (Safari 17+)
+  try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch(e){}
+  if(ac&&ac.state==='suspended')ac.resume();
+}
+function toneAt(t,f,d=.08,type='square',vol=.05,slide=0,bus){
+  if(!ac)return;
+  try{const o=ac.createOscillator(),g=ac.createGain();
     o.type=type;o.frequency.setValueAtTime(f,t);if(slide)o.frequency.linearRampToValueAtTime(Math.max(30,f+slide),t+d);
     g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
-    o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.03);}catch(e){}
+    o.connect(g).connect(bus||sfxBus);o.start(t);o.stop(t+d+.03);}catch(e){}
 }
-const seq=(notes,gap,d=.08,type)=>notes.forEach((f,i)=>setTimeout(()=>tone(f,d,type),i*gap));
+function noiseAt(t,d=.1,vol=.08,freq=1500,ftype='bandpass',bus){
+  if(!ac)return;
+  try{const s=ac.createBufferSource(),f=ac.createBiquadFilter(),g=ac.createGain();
+    s.buffer=noiseBuf;f.type=ftype;f.frequency.value=freq;
+    g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(.0001,t+d);
+    s.connect(f).connect(g).connect(bus||sfxBus);s.start(t,Math.random()*.5);s.stop(t+d+.03);}catch(e){}
+}
+function tone(f,d,type,vol,slide){if(!ac||G.mute)return;toneAt(ac.currentTime,f,d,type,vol,slide);}
+function noise(d,vol,freq,ftype){if(!ac||G.mute)return;noiseAt(ac.currentTime,d,vol,freq,ftype);}
+function seq(notes,gap,d=.08,type='square',vol=.05){if(!ac||G.mute)return;const t=ac.currentTime;notes.forEach((f,i)=>f&&toneAt(t+i*gap/1000,f,d,type,vol));}
 const SFX={
-  ding(){tone(1568,.06);setTimeout(()=>tone(2093,.1),60)},
-  jingle(){seq([523,659,784,1047],90)},
-  die(){seq([392,330,262,196],130,.14,'triangle')},
-  jump(){tone(330,.12,'square',.04,330)},
-  kick(){tone(150,.09,'square',.08,-70)},
-  whiff(){tone(240,.05,'triangle',.03,-90)},
-  bump(){tone(110,.06,'square',.06)},
-  bonk(){tone(620,.1,'square',.06,-420)},
-  pow(){tone(70,.45,'sawtooth',.1,-40);tone(140,.3,'square',.06,-90)},
-  boing(){tone(880,.08,'square',.04,-420)},
-  goal(){seq([784,988,1175,1568],70)},
-  boo(){tone(200,.3,'sawtooth',.06,-110)},
-  eat(){tone(660,.06);setTimeout(()=>tone(990,.08),60)},
-  oneup(){seq([660,880,1320,1760],60)},
-  hit(){tone(90,.22,'sawtooth',.08)},
-  paper(){tone(300,.15,'triangle',.07,-160)},
-  spawn(){tone(440,.08,'square',.04,440)},
-  trap(){tone(220,.1);setTimeout(()=>tone(170,.22),100)},
-  zap(){tone(1200,.15,'square',.05,-1000)},
-  alert(){seq([880,880,880],160,.1)},
-  rumble(){tone(60,.05,'sawtooth',.03)}
+  ding(){seq([1568,2093],60,.1)},
+  jingle(){seq([523,659,784,1047],90,.09)},
+  die(){seq([392,330,262,196,131],140,.16,'triangle',.07)},
+  jump(){tone(330,.14,'square',.04,380)},
+  kick(){noise(.06,.14,1800);tone(130,.09,'square',.08,-70)},
+  whiff(){noise(.08,.05,3000,'highpass')},
+  bump(){tone(110,.07,'square',.07);noise(.05,.06,600,'lowpass')},
+  bonk(){tone(900,.12,'square',.07,-650);noise(.05,.09,3500,'highpass')},
+  pow(){tone(60,.6,'sawtooth',.13,-30);tone(200,.45,'square',.05,900);noise(.45,.13,400,'lowpass')},
+  boing(){tone(880,.1,'square',.05,-500)},
+  goal(){seq([523,659,784,1047,784,1047],80,.1,'square',.06)},
+  boo(){tone(220,.35,'sawtooth',.07,-130);tone(165,.35,'sawtooth',.05,-90)},
+  eat(){seq([660,990],55,.07)},
+  oneup(){seq([660,880,1320,1760,2093],55,.07)},
+  hit(){noise(.16,.13,800,'lowpass');tone(180,.14,'square',.06,-100)},
+  paper(){noise(.22,.11,2600);noise(.12,.06,5000,'highpass')},
+  spawn(){tone(440,.1,'square',.04,440)},
+  trap(){seq([523,392,311],110,.13,'square',.06)},
+  zap(){tone(1200,.18,'square',.05,-1000)},
+  alert(){seq([880,0,880,0,880],80,.09)},
+  rumble(){noise(.06,.04,200,'lowpass')},
+  whoosh(){noise(.38,.09,1100);tone(260,.35,'triangle',.05,520)},
+  toss(){tone(520,.09,'square',.04,520);noise(.05,.03,4000,'highpass')},
+  rush(){seq([523,659,784,1047,1319],45,.07)}
 };
+
+/* music: 8th-note step sequencer, scheduled slightly ahead of time */
+const NOTE=m=>440*Math.pow(2,(m-69)/12);
+const TRACKS={
+  title:{bpm:132,drums:0,
+    lead:[72,0,76,0,79,0,76,72, 74,0,77,0,81,0,77,74, 72,0,76,0,79,0,84,0, 83,0,79,0,74,0,0,0],
+    bass:[48,0,55,0,48,0,55,0, 50,0,57,0,50,0,57,0, 48,0,55,0,48,0,55,0, 43,0,50,0,43,0,50,0]},
+  run:{bpm:150,drums:1,
+    lead:[69,72,76,72,69,72,76,79, 77,76,74,72,71,72,74,0, 69,72,76,72,69,72,76,81, 79,77,76,74,76,0,0,0],
+    bass:[45,45,57,45,45,45,57,45, 41,41,53,41,43,43,55,43, 45,45,57,45,45,45,57,45, 41,41,53,41,40,40,52,40]},
+  brawl:{bpm:168,drums:1,
+    lead:[76,0,79,76,0,74,76,0, 71,0,74,71,0,69,71,0, 72,0,76,72,0,71,72,0, 74,76,78,79,78,76,74,71],
+    bass:[40,52,40,52,40,52,40,52, 36,48,36,48,36,48,36,48, 38,50,38,50,38,50,38,50, 35,47,35,47,35,47,35,47]},
+  kitchen:{bpm:140,drums:2,
+    lead:[65,0,68,0,70,0,68,65, 0,63,65,0,0,0,0,0, 65,0,68,0,70,0,72,70, 68,0,65,0,0,0,0,0],
+    bass:[41,0,41,48,0,41,48,0, 39,0,39,46,0,39,46,0, 41,0,41,48,0,41,48,0, 36,0,36,43,0,36,43,0]}
+};
+const MUS={track:null,step:0,next:0,shift:0,speed:1};
+function setMusic(name){if(MUS.track===name)return;MUS.track=name;MUS.step=0;MUS.shift=0;MUS.speed=1;MUS.next=0;}
+function musicTick(){
+  if(!ac||!MUS.track||G.musicOff||ac.state!=='running')return;
+  const tr=TRACKS[MUS.track],spb=60/(tr.bpm*MUS.speed)/2,now=ac.currentTime;
+  if(MUS.next<now)MUS.next=now+.03;
+  while(MUS.next<now+.12){
+    const t=MUS.next,i=MUS.step%tr.lead.length,l=tr.lead[i],b=tr.bass[i];
+    if(l)toneAt(t,NOTE(l+MUS.shift),spb*.9,'square',.028,0,musBus);
+    if(b)toneAt(t,NOTE(b+MUS.shift),spb*.95,'triangle',.09,0,musBus);
+    if(tr.drums){
+      if(i%4===0)toneAt(t,150,.12,'sine',.18,-110,musBus);
+      if(tr.drums===1&&i%8===4)noiseAt(t,.1,.07,1800,'bandpass',musBus);
+      if(i%2===1)noiseAt(t,.03,.025,7000,'highpass',musBus);
+    }
+    MUS.next+=spb;MUS.step++;
+  }
+}
 
 /* ---------- input ---------- */
 const keys={},pressed={};
@@ -196,7 +253,8 @@ document.querySelectorAll('[data-k]').forEach(b=>{
 });
 cv.addEventListener('pointerdown',()=>{press('start');setTimeout(()=>release('start'),50);});
 const muteBtn=document.getElementById('mute');
-muteBtn.addEventListener('click',()=>{audioInit();G.mute=!G.mute;muteBtn.textContent=G.mute?'SOUND OFF':'SOUND ON';});
+let soundMode=0;
+muteBtn.addEventListener('click',()=>{audioInit();soundMode=(soundMode+1)%3;G.mute=soundMode===2;G.musicOff=soundMode>=1;muteBtn.textContent=['SOUND ON','MUSIC OFF','SOUND OFF'][soundMode];});
 
 /* ---------- game state ---------- */
 const G={lives:3,score:0,level:1,hi:0,mute:false,shake:0};
@@ -206,7 +264,7 @@ const pad6=n=>String(n).padStart(6,'0');
 let pops=[];
 function pop(x,y,s,col='#ffd23f'){pops.push({x:clamp(x,4+s.length*4,252-s.length*4),y,s,col,t:55});}
 let scene=null,frame=0,paused=false;
-function go(s,...a){scene=s;pops=[];s.init&&s.init(...a);}
+function go(s,...a){scene=s;pops=[];setMusic(s.music||null);s.init&&s.init(...a);}
 function hud(mid){
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,16);
   txt('SC '+pad6(G.score),4,4,'#fff');
@@ -395,7 +453,7 @@ const Run={
     }
   },
   startTurn(dir){
-    this.turnDir=dir;this.turnAnim=1;
+    this.turnDir=dir;this.turnAnim=1;SFX.whoosh();
     if(dir===this.correct){this.turns++;addScore(200);SFX.goal();pop(128,140,this.turns>=this.need?'ALMOST THERE!':'THIS WAY!','#5bc248');}
     else{SFX.paper();pop(128,140,'DETOUR!','#ff7eb6');}
     if(!this.off){this.off=document.createElement('canvas');this.off.width=512;this.off.height=512;}
@@ -417,7 +475,7 @@ const Run={
     this.en-=.03+.004*G.level;
     if(this.inv>0)this.inv--;
     if(this.cd>0)this.cd--;
-    if(pressed.a&&this.cd===0){if(this.ammo>0){this.ammo--;this.cd=12;this.shots.push({x:this.px,d:this.pd+12});SFX.jump();}else{this.cd=20;SFX.whiff();pop(this.px,160,'NO DONUTS','#8f89a8');}}
+    if(pressed.a&&this.cd===0){if(this.ammo>0){this.ammo--;this.cd=12;this.shots.push({x:this.px,d:this.pd+12});SFX.toss();}else{this.cd=20;SFX.whiff();pop(this.px,160,'NO DONUTS','#8f89a8');}}
     for(const s of this.shots){s.d+=4.5;for(const o of this.objs)if(!o.dead&&!s.dead&&(o.type==='walker'||o.type==='crosser')&&Math.abs(o.x-s.x)<13&&Math.abs(o.d-s.d)<14){o.dead=1;s.dead=1;addScore(150);SFX.eat();pop(o.x,190-(o.d-this.pd)-16,pick(['YUM!','THANKS!','OOH DONUT']),'#ff7eb6');}}
     this.shots=this.shots.filter(s=>!s.dead&&s.d<this.pd+240);
     this.st-=this.sp;if(this.st<=0)this.spawn();
@@ -687,7 +745,7 @@ const Kitchen={
       if(p.dir[0]||p.dir[1])p.anim++;
     }
     // puddings
-    for(const q of this.puds){if(Math.abs(q.c*16+8-p.x)<9&&Math.abs(q.r*16+8-p.y)<9){q.dead=1;this.got++;p.rush=240;addScore(100);SFX.eat();pop(p.x,p.y+4,this.got>=this.need?'ALL SET! TO DESK!':'SUGAR RUSH!','#f6e7a1');}}
+    for(const q of this.puds){if(Math.abs(q.c*16+8-p.x)<9&&Math.abs(q.r*16+8-p.y)<9){q.dead=1;this.got++;p.rush=240;addScore(100);SFX.rush();pop(p.x,p.y+4,this.got>=this.need?'ALL SET! TO DESK!':'SUGAR RUSH!','#f6e7a1');}}
     this.puds=this.puds.filter(q=>!q.dead);
     // coworkers
     for(const co of this.cos){
@@ -747,6 +805,9 @@ function step(){
   if(pressed.pause){paused=!paused;}
   if(paused){if(pressed.start||pressed.a)paused=false;for(const k in pressed)pressed[k]=false;return;}
   scene.update();
+  if(scene===Brawl)MUS.shift=Brawl.gd<0?5:0;
+  if(scene===Kitchen)MUS.speed=Kitchen.p&&Kitchen.p.rush>0?1.3:1;
+  musicTick();
   pops.forEach(p=>{p.y-=.5;p.t--;});pops=pops.filter(p=>p.t>0);
   if(G.shake>0)G.shake--;
   for(const k in pressed)pressed[k]=false;
@@ -768,6 +829,7 @@ function loop(ts){
   render();
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&scene!==Title)paused=true;});
+Title.music='title';Run.music='run';Brawl.music='brawl';Kitchen.music='kitchen';
 window.__cpm={step,go,keys,pressed,G,scenes:{Title,Intro,Run,Brawl,Kitchen,Banner},get scene(){return scene}};
 go(Title);
 requestAnimationFrame(loop);
