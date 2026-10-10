@@ -491,7 +491,7 @@ const Run={
     if(this.back<0){hw(56,0,ox+66);hw(-62,0,ox+66);}
     if(this.back>0){hw(56,ox+190,w);hw(-62,ox+190,w);}
     if(!this.final){
-      const lab=this.correct<0?'< MEETING ROOM':'MEETING ROOM >';
+      const lab=this.correct<0?'< TASK':'TASK >';
       // the sign gets harder to read as the week goes on:
       // day 3 it fades away, day 4 it flips back and forth (mirrored half the time), day 5 it's rotated
       const sign=(cx,sy)=>{const lv=Math.min(G.level,5);let a=1;
@@ -530,7 +530,7 @@ const Run={
     const r=Math.random();let type=r<.2?'food':r<.5?'paper':r<.8?'walker':'crosser';
     if(G.level>=3&&Math.random()<(G.level>=4?.22:.08))type='stapler';
     const o={type,d,x:rnd(86,170),wob:rnd(0,6),pal:pick(CO_PALS),vx:pick([-.6,.6])};
-    if(type==='food'){const q=Math.random();o.kind=q<.06?'pudding':q<.55?'donut':pick(['burger','coffee']);if(G.level>=2&&Math.random()<.1)o.kind='cosmic';}
+    if(type==='food'){const q=Math.random();o.kind=q<.06?'pudding':q<.55?'donut':pick(['burger','coffee']);if(Math.random()<(G.level>=2?.1:.06))o.kind='cosmic';}
     if((type==='walker'||type==='crosser')&&G.level>=3&&Math.random()<.2*(G.level-2)){o.master=1;o.hp=2;}
     if(type==='crosser')o.vx*=1.5;
     if(type==='paper'){o.vx=pick([-.8,.8]);o.label=pick(['QUESTIONS','ERRORS','','REQUESTS','ERRORS','QUESTIONS','']);}
@@ -540,7 +540,7 @@ const Run={
     const y=190-(o.d-this.pd)-16;
     if(o.type==='food'){o.dead=1;addScore(50);
       if(o.kind==='pudding'){G.lives=Math.min(5,G.lives+1);this.en=100;SFX.oneup();pop(o.x,y,'1UP!','#6fb7ff');}
-      else if(o.kind==='cosmic'){G.trip=360;this.inv=360;this.ammo=Math.min(9,this.ammo+3);this.en=100;SFX.rush();pop(o.x,y,'COSMIC SNACK!','#ff7eb6');}
+      else if(o.kind==='cosmic'){G.trip=360;this.inv=360;mood(.45);G.lives=Math.min(5,G.lives+1);this.ammo=Math.min(9,this.ammo+3);this.en=100;SFX.rush();pop(o.x,y,'COSMIC SNACK!','#ff7eb6');}
       else if(o.kind==='donut'){this.ammo=Math.min(9,this.ammo+2);this.en=Math.min(100,this.en+10);SFX.eat();pop(o.x,y,'+2 DONUTS','#ff7eb6');}
       else{this.en=Math.min(100,this.en+20);SFX.eat();pop(o.x,y,o.kind==='coffee'?'+CAFFEINE':'+SNACK','#5bc248');}
     }else if(this.inv===0){
@@ -936,20 +936,20 @@ function drawStapler(x,y,s=1){
 }
 /* ---------- after round 3: the drive home. Faster, faster, or overtime catches you ---------- */
 const DriveHome={
-  init(){this.x=128;this.dist=0;this.sp=4;this.gap=260;this.t=0;this.objs=[];this.st=60;this.inv=0;this.done=0;this.nitro=0;this.spin=0;this.off=false;
-    this.goal=8000+Math.min(G.level,4)*1500;},
+  init(){this.x=128;this.dist=0;this.sp=4;this.gap=320;this.t=0;this.objs=[];this.st=60;this.inv=0;this.done=0;this.nitro=0;this.spin=0;this.off=false;
+    this.goal=6000+Math.min(G.level,4)*1000;},
   center(d){return Math.round(128+44*Math.sin(d/340)+20*Math.sin(d/121+2));},
-  half(d){return Math.round(56+8*Math.sin(d/500));},
+  half(d){return Math.round(64+6*Math.sin(d/500));},
   sy(d){return H-(d-this.dist);},           // your car sits at y 180, i.e. world d = dist+60
-  chase(){return Math.min(7.8,3+this.t*.0018+(Math.min(G.level,4)-1)*.3);},
-  top(){return(this.nitro>0?11:8.5)*(1+G.mood*.06);},
+  chase(){return Math.min(5.2,2.2+this.t*.0009+(Math.min(G.level,4)-1)*.2);},
+  top(){return(this.nitro>0?9:6)*(1+G.mood*.06);},
   spawn(){
     const d=this.dist+H+30,c=this.center(d),h=this.half(d),r=Math.random();
-    let type=r<.5?'car':r<.62?'oil':r<.78?'boost':r<.88?'coffee':'paper';
-    if(G.level>=3&&Math.random()<.07)type='stapler';
+    let type=r<.3?'car':r<.4?'oil':r<.62?'boost':r<.88?'coffee':'paper';
+    if(G.level>=3&&Math.random()<.04)type='stapler';
     this.objs.push({type,d,x:c+rnd(-1,1)*(h-14),vs:type==='car'?rnd(2.5,4.5):0,
       col:pick(['#9b59d0','#e08b2f','#3fb1a0','#c9c4b5','#5bc248']),vx:type==='paper'?pick([-1.6,1.6]):type==='stapler'?pick([-2.4,2.4]):0});
-    this.st=rnd(30,58)*(1-.06*(Math.min(G.level,4)-1));
+    this.st=rnd(70,120)*(1-.05*(Math.min(G.level,4)-1));
   },
   hit(o){
     const y=this.sy(o.d)-16;
@@ -966,15 +966,15 @@ const DriveHome={
       if(this.done>110){G.level++;go(Banner,['HOME SAFE','','YOU BEAT OVERTIME','','DAY '+G.level+' ('+DAYS[Math.min(G.level,5)-1]+') STARTS NOW',DAY_NEWS[G.level]||''],()=>go(Intro),240);}
       return;}
     const top=this.top();
-    let tgt=keys.up?top:keys.down?2:Math.min(top,5.5+this.t*.002);
+    let tgt=keys.up?top:keys.down?1.5:Math.min(top,3.8+this.t*.001);
     if(this.nitro>0){this.nitro--;tgt=top;}
     this.sp+=(tgt-this.sp)*.05;
     const steer=(keys.right?1:0)-(keys.left?1:0);
-    this.x=clamp(this.x+steer*(this.spin>0?-1:1)*(2.4+this.sp*.2),10,246);
+    this.x=clamp(this.x+steer*(this.spin>0?-1:1)*(2.2+this.sp*.2)+(this.nitro>0?Math.sin(frame*.3)*1.3:0),10,246);   // nitro: fast and a little out of control
     if(this.spin>0)this.spin--;
     const pd=this.dist+60,c=this.center(pd),h=this.half(pd);
     this.off=Math.abs(this.x-c)>h-6;
-    if(this.off){this.sp=Math.min(this.sp,4);if(frame%6===0)SFX.rumble();}
+    if(this.off){this.sp=Math.min(this.sp,3);if(frame%6===0)SFX.rumble();}
     this.dist+=this.sp;
     this.gap=Math.min(300,this.gap+this.sp-this.chase());
     if(this.inv>0)this.inv--;
@@ -1005,7 +1005,7 @@ const DriveHome={
       ctx.fillStyle='#ffd23f';ctx.fillRect(c-22,gy-32,10,8);ctx.fillRect(c+12,gy-32,10,8);ctx.fillStyle='#3a2410';ctx.fillRect(c-5,gy-24,10,18);
       txt('HOME',c,gy-4,'#ffd23f',8,'center');}
     // speed streaks
-    if(sp>7){ctx.fillStyle='rgba(255,255,255,.35)';for(let i=0;i<6;i++){const x=(i*47+frame*13)%W,y=(i*71+frame*sp*3)%H;ctx.fillRect(x,y,1,10+sp*2);}}
+    if(sp>5.2){ctx.fillStyle='rgba(255,255,255,.35)';for(let i=0;i<6;i++){const x=(i*47+frame*13)%W,y=(i*71+frame*sp*3)%H;ctx.fillRect(x,y,1,10+sp*2);}}
     for(const o of this.objs){const y=this.sy(o.d),x=o.x;
       if(o.type==='car'){drawCar(x,y,o.col);ctx.fillStyle='#ff2a2a';ctx.fillRect(x-5,y+8,2,1);ctx.fillRect(x+3,y+8,2,1);}
       else if(o.type==='oil'){ctx.fillStyle='#05040a';ctx.fillRect(x-10,y-5,20,10);ctx.fillRect(x-7,y-7,14,14);ctx.fillStyle='#4a3f6b';ctx.fillRect(x-4,y-3,5,2);}
@@ -1028,7 +1028,7 @@ const DriveHome={
       for(let i=0;i<5;i++){const ex=(i*53+frame*2)%W;ctx.fillStyle='#f4f4f4';ctx.fillRect(ex,cy+14,8,6);ctx.fillStyle='#8a8aa0';ctx.fillRect(ex+1,cy+15,6,1);}}
     hud('DRIVE HOME');
     ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,16,W,12);
-    txt(String(Math.round(sp*12)).padStart(3,' ')+' MPH',4,18,sp>8?'#ffd23f':'#f4f4f4',8,'left',null);
+    txt(String(Math.round(sp*17)).padStart(3,' ')+' MPH',4,18,sp>6.2?'#ffd23f':'#f4f4f4',8,'left',null);
     txt('HOME',140,18,'#f4f4f4',8,'left',null);ctx.fillStyle='#2a2440';ctx.fillRect(176,19,74,6);
     ctx.fillStyle='#5bc248';ctx.fillRect(176,19,clamp((this.dist+60)/this.goal,0,1)*74,6);
     if(this.gap<90&&!this.done&&(frame>>3)%2)txt('FASTER!!',128,44,'#e8433a',16,'center','#0d0b14');
