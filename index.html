@@ -123,10 +123,30 @@ function drawImg(im,x,y,fx,fy){
   if(!fx&&!fy){ctx.drawImage(im,x,y);return;}
   ctx.save();ctx.translate(x+(fx?w:0),y+(fy?h:0));ctx.scale(fx?-1:1,fy?-1:1);ctx.drawImage(im,0,0);ctx.restore();}
 // the week takes its toll: from Tuesday on, the hero's face gets more and more possessed
-function craze(){return typeof scene!=='undefined'&&[Intro,Run,Brawl,Kitchen,DriveHome,Boss].includes(scene)?clamp(G.level-1,0,4):0;}
+function heroMood(){return typeof scene!=='undefined'&&[Intro,Run,Brawl,Kitchen,DriveHome,Boss].includes(scene)?G.mood:0;}
+function zombie(){const m=heroMood();return m<-.85?4:m<-.6?3:m<-.35?2:m<-.15?1:0;}
+function god(){const m=heroMood();return m>.8?3:m>.6?2:m>.35?1:0;}
+function craze(){return zombie();}
 function face(im){
-  const lv=craze();if(!lv||!im||!im.naturalWidth)return im;
-  return crazify(im,lv>=2&&frame%150<4?4:lv);   // every few seconds, a flash of full possession
+  if(!im||!im.naturalWidth)return im;
+  const z=zombie(),gd=god();
+  if(z)return crazify(im,z>=2&&frame%150<4?4:z);   // every few seconds, a flash of full zombie
+  if(gd)return godify(im,gd);
+  return im;
+}
+function godify(im,lv){
+  im._gd=im._gd||[];if(im._gd[lv])return im._gd[lv];
+  const w=im.naturalWidth,h=im.naturalHeight,c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d');x.drawImage(im,0,0);let d;try{d=x.getImageData(0,0,w,h);}catch(e){return im;}
+  const a=[0,.2,.45,.75][lv],px=d.data;
+  for(let y=0;y<h;y++)for(let X=0;X<w;X++){const i=(y*w+X)*4;if(px[i+3]<10)continue;
+    let r=px[i],g=px[i+1],b=px[i+2];const lum=.3*r+.59*g+.11*b;
+    const eye=y>h*.37&&y<h*.5&&X>w*.2&&X<w*.8,skin=r>170&&g>90&&g<200&&b<150&&r>g;
+    if(skin){r+=(255-r)*a;g+=(214-g)*a;b+=(90-b)*a;}
+    else if(lv>=3&&eye&&lum<90){r=255;g=250;b=200;}
+    else if(lv>=2&&lum<110&&y<h*.3){r+=(255-r)*.5;g+=(200-g)*.5;b*=.6;}
+    px[i]=r;px[i+1]=g;px[i+2]=b;}
+  x.putImageData(d,0,0);im._gd[lv]=c;return c;
 }
 function crazify(im,lv){
   im._cz=im._cz||[];if(im._cz[lv])return im._cz[lv];
@@ -146,10 +166,20 @@ function crazify(im,lv){
   x.putImageData(d,0,0);im._cz[lv]=c;return c;
 }
 // hero = your portrait as the head on a little pixel body. x,y = top-left of a box o.h tall
-function drawHero(x,y,o={}){const s=o.s||1,im=HEADS[o.head],bw=8*s,bh=6*s,body=o.walk?BODY2:BODY;
+const BUFF=['SSBBBBBBSS','SSBBYYBBSS','SS.BBBB.SS','...PPPP...','...P..P...','..KK..KK..'],BUFF2=[...BUFF.slice(0,4),'..P....P..','.KK....KK.'];
+function heroAura(cx,top,bot,s,flipped){const gd=god();if(!gd)return;
+  const pulse=.18+.08*Math.sin(frame/6)+gd*.06;for(const k of[1,.7]){ctx.fillStyle='rgba(255,210,63,'+(pulse*k).toFixed(3)+')';ctx.beginPath();ctx.ellipse(cx,(top+bot)/2,(6+4/k)*s,(bot-top)/2+3*s/k,0,0,7);ctx.fill();}
+  if(gd>=2){ctx.fillStyle='#ffd23f';for(let i=0;i<4;i++){const a=frame/9+i*1.57;ctx.fillRect(cx+Math.cos(a)*9*s,(top+bot)/2+Math.sin(a)*12*s,s,s);}}
+  if(gd>=3){ctx.strokeStyle='#ffd23f';ctx.lineWidth=Math.max(1,s/2);ctx.beginPath();ctx.ellipse(cx,flipped?bot+1*s:top-1*s,5*s,1.6*s,0,0,7);ctx.stroke();}}
+function heroPal(pal){const z=zombie(),gd=god();
+  if(z)return{...(pal||{}),S:'#9ccf84',...(z>=3?{B:'#4a5a6a',P:'#2a2a30'}:{})};
+  if(gd>=2)return{...(pal||{}),S:'#ffc94a'};return pal;}
+function drawHero(x,y,o={}){const s=o.s||1,im=HEADS[o.head],gd=god(),bw=8*s,bh=6*s,body=gd?(o.walk?BUFF2:BUFF):(o.walk?BODY2:BODY);
+  const pal=heroPal(o.pal),bx=gd?x-s:x;
+  heroAura(x+bw/2,y-(im&&im.naturalHeight||o.head)+o.h-bh,y+o.h,s,o.vflip);
   const hw=im&&im.naturalWidth||o.head,hh=im&&im.naturalHeight||o.head;
-  if(!o.vflip){spr(body,x,y+o.h-bh,{s,flip:o.flip,pal:o.pal});drawImg(im,x+bw/2-hw/2,y+o.h-bh-hh+2,o.flip,false);}
-  else{spr(body,x,y,{s,flip:o.flip,vflip:true,pal:o.pal});drawImg(im,x+bw/2-hw/2,y+bh-2,o.flip,true);}}
+  if(!o.vflip){spr(body,bx,y+o.h-bh,{s,flip:o.flip,pal});drawImg(im,x+bw/2-hw/2,y+o.h-bh-hh+2,o.flip,false);}
+  else{spr(body,bx,y,{s,flip:o.flip,vflip:true,pal});drawImg(im,x+bw/2-hw/2,y+bh-2,o.flip,true);}}
 const BALL=["..KKKK..",".KYYYYK.","KYWWYYYK","KYWYYYYK","KYYYYYOK","KYYYYOOK",".KYOOOK.","..KKKK.."];
 // banana cream pie pudding: whipped cream, banana slices, wafer bits, yellow cup
 const PUD=[".WWWWWW.","WWYWWYWW","VVVVVVVV","YYYYYYYY",".YDYYDY.",".YYOYYY.","..YYYY..","..OYYO.."];
@@ -292,10 +322,12 @@ muteBtn.addEventListener('click',()=>{audioInit();soundMode=(soundMode+1)%3;G.mu
 const G={lives:3,score:0,level:1,hi:0,mute:false,shake:0,trip:0,mood:0};
 try{G.hi=+localStorage.getItem('cpm-hi')||0}catch(e){}
 function mood(d){const b=G.mood;G.mood=clamp(G.mood+d,-1,1);
-  if(b<.55&&G.mood>=.55)pop(128,60,'FEELING GREAT!','#ff7eb6');
-  if(b>-.55&&G.mood<=-.55)pop(128,60,'ROUGH DAY...','#8f89a8');}
+  if(b<.35&&G.mood>=.35)pop(128,60,'FEELING STRONG!','#ffd23f');
+  if(b<.8&&G.mood>=.8)pop(128,60,'ASCENDED!','#ffd23f');
+  if(b>-.35&&G.mood<=-.35)pop(128,60,'GOING ZOMBIE...','#9ccf84');
+  if(b>-.85&&G.mood<=-.85)pop(128,60,'FULL ZOMBIE','#9ccf84');}
 for(const[k,v]of[['hit',-.12],['trap',-.15],['boo',-.12],['die',-.3]]){const f=SFX[k];SFX[k]=()=>{mood(v);f();};}
-function addScore(n){if(n>0)mood(Math.min(n,600)/3000);G.score=Math.max(0,G.score+n);if(G.score>G.hi){G.hi=G.score;try{localStorage.setItem('cpm-hi',String(G.hi))}catch(e){}}}
+function addScore(n){if(n>0)mood(Math.min(n,600)/6000);G.score=Math.max(0,G.score+n);if(G.score>G.hi){G.hi=G.score;try{localStorage.setItem('cpm-hi',String(G.hi))}catch(e){}}}
 const pad6=n=>String(n).padStart(6,'0');
 let pops=[];
 function pop(x,y,s,col='#ffd23f'){pops.push({x:clamp(x,4+s.length*4,252-s.length*4),y,s,col,t:55});}
@@ -549,7 +581,7 @@ const Run={
       ctx.fillStyle='#343b5c';ctx.fillRect(0,0,W,H);
       ctx.save();ctx.translate(this.px,190);ctx.rotate(th);ctx.drawImage(this.off,-(this.px+128),-256);ctx.restore();}
     else{this.drawWorld(W,H,0,190);this.drawObjs(0,190);}
-    if(!(this.inv&&(frame>>2)%2)){spr(((this.anim>>3)%2?RUNNER:RUNNER2).slice(4),this.px-8,188,{s:2});drawImg(HEADS[14],this.px-7,172);}
+    if(!(this.inv&&(frame>>2)%2)){heroAura(this.px,172,200,2,false);spr(((this.anim>>3)%2?RUNNER:RUNNER2).slice(4),this.px-8,188,{s:2,pal:heroPal()});drawImg(HEADS[14],this.px-7,172);}
     if(!this.final&&!this.turnAnim&&this.J-this.pd<=24&&(frame>>3)%2){txt('<',this.px-26,184,'#ffd23f');txt('>',this.px+20,184,'#ffd23f');}
     hud('CUBICLE RUN');
     ctx.fillStyle='rgba(0,0,0,.75)';ctx.fillRect(0,226,W,14);
@@ -894,20 +926,20 @@ function drawStapler(x,y,s=1){
 }
 /* ---------- after round 3: the drive home. Faster, faster, or overtime catches you ---------- */
 const DriveHome={
-  init(){this.x=128;this.dist=0;this.sp=4;this.gap=220;this.t=0;this.objs=[];this.st=60;this.inv=0;this.done=0;this.nitro=0;this.spin=0;this.off=false;
+  init(){this.x=128;this.dist=0;this.sp=4;this.gap=260;this.t=0;this.objs=[];this.st=60;this.inv=0;this.done=0;this.nitro=0;this.spin=0;this.off=false;
     this.goal=8000+Math.min(G.level,4)*1500;},
   center(d){return Math.round(128+44*Math.sin(d/340)+20*Math.sin(d/121+2));},
   half(d){return Math.round(56+8*Math.sin(d/500));},
   sy(d){return H-(d-this.dist);},           // your car sits at y 180, i.e. world d = dist+60
-  chase(){return Math.min(8.6,3+this.t*.002+(Math.min(G.level,4)-1)*.35);},
+  chase(){return Math.min(7.8,3+this.t*.0018+(Math.min(G.level,4)-1)*.3);},
   top(){return(this.nitro>0?11:8.5)*(1+G.mood*.06);},
   spawn(){
     const d=this.dist+H+30,c=this.center(d),h=this.half(d),r=Math.random();
     let type=r<.5?'car':r<.62?'oil':r<.78?'boost':r<.88?'coffee':'paper';
-    if(G.level>=3&&Math.random()<.15)type='stapler';
+    if(G.level>=3&&Math.random()<.07)type='stapler';
     this.objs.push({type,d,x:c+rnd(-1,1)*(h-14),vs:type==='car'?rnd(2.5,4.5):0,
       col:pick(['#9b59d0','#e08b2f','#3fb1a0','#c9c4b5','#5bc248']),vx:type==='paper'?pick([-1.6,1.6]):type==='stapler'?pick([-2.4,2.4]):0});
-    this.st=rnd(22,48)*(1-.08*(Math.min(G.level,4)-1));
+    this.st=rnd(30,58)*(1-.06*(Math.min(G.level,4)-1));
   },
   hit(o){
     const y=this.sy(o.d)-16;
@@ -932,7 +964,7 @@ const DriveHome={
     if(this.spin>0)this.spin--;
     const pd=this.dist+60,c=this.center(pd),h=this.half(pd);
     this.off=Math.abs(this.x-c)>h-6;
-    if(this.off){this.sp=Math.min(this.sp,3.8);if(frame%6===0)SFX.rumble();}
+    if(this.off){this.sp=Math.min(this.sp,4);if(frame%6===0)SFX.rumble();}
     this.dist+=this.sp;
     this.gap=Math.min(300,this.gap+this.sp-this.chase());
     if(this.inv>0)this.inv--;
@@ -1153,20 +1185,16 @@ function postFX(){
     if(trip&&(frame>>3)%5===0){fc.clearRect(0,0,W,H);fc.drawImage(cv,0,0,W/4,H/4);ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(fxCv,0,0,W/4,H/4,0,0,W,H);ctx.restore();}
   }
   // mood: doing well turns the world pink and sparkly, doing badly drains it dark
-  if(m>.15){
-    ctx.fillStyle='rgba(255,126,182,'+(m*.13).toFixed(3)+')';ctx.fillRect(0,0,W,H);
-    const n=Math.round(m*16);
+  if(m>.5){const q=(m-.5)*2;
+    ctx.fillStyle='rgba(255,126,182,'+(q*.12).toFixed(3)+')';ctx.fillRect(0,0,W,H);
+    const n=Math.round(q*16);
     for(let i=0;i<n;i++){const x=(i*97+frame*(1+i%3))%W,y=(i*53+frame*(1+i%2)*.7)%H,c=i%2?'#ff7eb6':'#ffd23f';
       ctx.fillStyle=c;ctx.fillRect(x,y,2,2);if((frame+i*7)%20<10){ctx.fillRect(x-2,y,1,2);ctx.fillRect(x+3,y,1,2);ctx.fillRect(x,y-2,2,1);ctx.fillRect(x,y+3,2,1);}}
-  }else if(m<-.15){
-    const a=-m;ctx.fillStyle='rgba(6,4,22,'+(a*.28).toFixed(3)+')';ctx.fillRect(0,0,W,H);
-    for(let i=1;i<=6;i++){const t=i*7;ctx.fillStyle='rgba(0,0,0,'+(a*.1).toFixed(3)+')';ctx.fillRect(0,0,W,t);ctx.fillRect(0,H-t,W,t);ctx.fillRect(0,0,t,H);ctx.fillRect(W-t,0,t,H);}
   }
   let f='';
   if(k>0||trip)f+='hue-rotate('+(Math.round(trip?frame*7:frame*k*1.5)%360)+'deg) ';
   if(trip)f+='saturate(1.8)';
-  else if(m>.15)f+='saturate('+(1+m*.7).toFixed(2)+')';
-  else if(m<-.15)f+='saturate('+(1+m*.65).toFixed(2)+') brightness('+(1+m*.25).toFixed(2)+')';
+  else if(m>.5)f+='saturate('+(1+(m-.5)*1.4).toFixed(2)+')';
   f=f.trim();if(cv.style.filter!==f)cv.style.filter=f;
 }
 
