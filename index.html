@@ -167,7 +167,12 @@ function crazify(im,lv){
 }
 // hero = your portrait as the head on a little pixel body. x,y = top-left of a box o.h tall
 const BUFF=['SSBBBBBBSS','SSBBYYBBSS','SS.BBBB.SS','...PPPP...','...P..P...','..KK..KK..'],BUFF2=[...BUFF.slice(0,4),'..P....P..','.KK....KK.'];
-function heroAura(cx,top,bot,s,flipped){const gd=god();if(!gd)return;
+function heroAura(cx,top,bot,s,flipped){const gd=god(),z=zombie();
+  if(z){const a=.1+z*.05+.05*Math.sin(frame/3);ctx.fillStyle='rgba(70,190,80,'+a.toFixed(3)+')';
+    ctx.beginPath();ctx.ellipse(cx+rnd(-1,1)*z,(top+bot)/2,(5+z*1.5)*s,(bot-top)/2+(1+z)*s,0,0,7);ctx.fill();
+    ctx.fillStyle='#4fbf5a';for(let i=0;i<z*2;i++){const px=cx+Math.sin(frame/7+i*2.3)*(6+z)*s,py=top+((frame*.6+i*17)%(bot-top+8*s));ctx.fillRect(px,py,s,2*s);}
+    return;}
+  if(!gd)return;
   const pulse=.18+.08*Math.sin(frame/6)+gd*.06;for(const k of[1,.7]){ctx.fillStyle='rgba(255,210,63,'+(pulse*k).toFixed(3)+')';ctx.beginPath();ctx.ellipse(cx,(top+bot)/2,(6+4/k)*s,(bot-top)/2+3*s/k,0,0,7);ctx.fill();}
   if(gd>=2){ctx.fillStyle='#ffd23f';for(let i=0;i<4;i++){const a=frame/9+i*1.57;ctx.fillRect(cx+Math.cos(a)*9*s,(top+bot)/2+Math.sin(a)*12*s,s,s);}}
   if(gd>=3){ctx.strokeStyle='#ffd23f';ctx.lineWidth=Math.max(1,s/2);ctx.beginPath();ctx.ellipse(cx,flipped?bot+1*s:top-1*s,5*s,1.6*s,0,0,7);ctx.stroke();}}
@@ -355,7 +360,11 @@ function drawStats(x,y){
     ctx.fillStyle=v<25&&(frame>>3)%2?'#e8433a':STAT_COL[k];ctx.fillRect(xx+8,y+1,Math.round(18*v/100),4);}
 }
 const WATER=["...WW...","..UUUU..","..UWUU..",".UUWUUU.",".UUUUUU.",".UUUUUU.",".UUUUUU.","..UUUU.."];
-function mood(d){G.st.san=clamp(G.st.san+d*30,0,100);}
+function mood(d){
+  if(d>0){G.streak=(G.streak||0)+1;d*=1+Math.min(G.streak,12)*.12;
+    if(G.streak===5||G.streak===10||G.streak===20)pop(128,72,'STREAK x'+G.streak+'!','#ffd23f');}
+  else if(d<0)G.streak=0;
+  G.st.san=clamp(G.st.san+d*30,0,100);}
 function syncMood(){const b=G.mood;G.mood=(G.st.san-50)/50;
   if(b<.35&&G.mood>=.35)pop(128,60,'FEELING STRONG!','#ffd23f');
   if(b<.8&&G.mood>=.8)pop(128,60,'ASCENDED!','#ffd23f');
@@ -372,12 +381,12 @@ function hud(mid){
   ctx.fillStyle='#000';ctx.fillRect(0,0,W,16);
   txt('SC '+pad6(G.score),4,4,'#fff');
   if(statScene())drawStats(80,5);else if(mid)txt(mid,150,4,'#ffd23f',8,'center');
-  for(let i=0;i<G.lives;i++)drawImg(HEADS[8],W-11-i*10,3);
+  drawImg(HEADS[8],W-11,3);
 }
+// no lives: a failed round just costs sanity, then you take a breath and go again
 function loseLife(retry){
-  if(!G.god)G.lives--;SFX.die();
-  if(G.lives<=0)go(Banner,['GAME OVER','','FINAL SCORE',pad6(G.score),'','THE TASK WILL','HAVE TO WAIT'],()=>go(Title),260);
-  else go(Banner,['OOPS!','','LIVES LEFT: '+G.lives,'','BACK AT IT'],retry,150);
+  SFX.die();if(!G.god)G.st.san=clamp(G.st.san-20,0,100);G.streak=0;
+  go(Banner,['OOF.','','SANITY TOOK A HIT','','TAKE A BREATH','AND GO AGAIN'],retry,150);
 }
 
 /* ---------- banner ---------- */
@@ -403,7 +412,7 @@ const Title={
     for(const k of ['up','down','left','right','b','a'])if(pressed[k]){this.code.push(k);this.code=this.code.slice(-10);}
     if(this.code.join()==='up,up,down,down,left,right,left,right,b,a'){SFX.oneup();return go(Dev);}
     if(G.dev&&pressed.b)return go(Dev);
-    if(pressed.start||pressed.a){G.lives=3;G.score=0;G.level=1;G.mood=0;freshStats();go(Intro);}},
+    if(pressed.start||pressed.a){G.score=0;G.level=1;G.mood=0;G.streak=0;freshStats();go(Intro);}},
   draw(){
     ctx.fillStyle='#05040a';ctx.fillRect(0,0,W,H);
     for(let i=0;i<40;i++){const x=(i*53+this.t*(1+i%3)*.3)%W,y=(i*37)%H;ctx.fillStyle=i%4?'#2a2440':'#8f89a8';ctx.fillRect(x|0,y,1,1);}
@@ -502,9 +511,9 @@ const Run={
     ctx.fillStyle='#3e466b';ctx.fillRect(x+2,y+2,wd-4,36);
     ctx.fillStyle='#8b93ad';ctx.fillRect(x,y,wd,3);ctx.fillRect(x,y,3,40);
     ctx.fillStyle='#8a5a32';ctx.fillRect(x+6,y+6,wd-14,8);ctx.fillRect(x+6,y+6,8,24);
-    ctx.fillStyle='#1b1d2a';ctx.fillRect(x+14,y+7,11,6);ctx.fillStyle=G.level>=2&&h%4===1?'hsl('+((frame*6+h*40)%360)+',90%,60%)':h%3?'#6fb7ff':'#5bc248';ctx.fillRect(x+15,y+8,9,3);
+    ctx.fillStyle='#1b1d2a';ctx.fillRect(x+14,y+7,11,6);ctx.fillStyle=zombie()>=1&&h%4===1?'hsl('+((frame*6+h*40)%360)+',90%,60%)':h%3?'#6fb7ff':'#5bc248';ctx.fillRect(x+15,y+8,9,3);
     ctx.fillStyle='#24263a';ctx.fillRect(x+20,y+20,9,9);
-    if(G.level>=3&&h%6===2&&(frame+h*13)%180>8){ctx.fillStyle='#ff2a2a';ctx.fillRect(x+21,y+23,2,2);ctx.fillRect(x+26,y+23,2,2);}
+    if(zombie()>=2&&h%6===2&&(frame+h*13)%180>8){ctx.fillStyle='#ff2a2a';ctx.fillRect(x+21,y+23,2,2);ctx.fillRect(x+26,y+23,2,2);}
     if(h%4===0){ctx.fillStyle='#2f7a2a';ctx.fillRect(x+wd-12,y+29,7,6);ctx.fillStyle='#5bc248';ctx.fillRect(x+wd-13,y+25,9,5);}
     if(h%5===1){ctx.fillStyle='#f4f4f4';ctx.fillRect(x+wd-16,y+7,7,5);}
   },
@@ -566,7 +575,7 @@ const Run={
     for(const s of this.shots)spr(DONUT,s.x+ox-4,oy-(s.d-this.pd)-4,{flip:(frame>>2)%2===1});
   },
   spawn(){
-    const d=this.pd+215;this.st=rnd(52,100)-Math.min(G.level*4,20);
+    const d=this.pd+215;this.st=rnd(44,88)-Math.min(G.level*4,20);
     if(d>this.J-90)return;
     const r=Math.random();let type=r<.2?'food':r<.5?'paper':r<.8?'walker':'crosser';
     if(G.level>=3&&Math.random()<(G.level>=4?.22:.08))type='stapler';
@@ -580,8 +589,8 @@ const Run={
   hitObj(o){
     const y=190-(o.d-this.pd)-16;
     if(o.type==='food'){o.dead=1;addScore(50);
-      if(o.kind==='pudding'){G.lives=Math.min(5,G.lives+1);give('food',40);this.en=100;SFX.oneup();pop(o.x,y,'1UP!','#6fb7ff');}
-      else if(o.kind==='cosmic'){G.trip=360;give('food',30);give('water',30);give('caf',30);this.inv=360;mood(.45);G.lives=Math.min(5,G.lives+1);this.ammo=Math.min(9,this.ammo+3);this.en=100;SFX.rush();pop(o.x,y,'COSMIC SNACK!','#ff7eb6');}
+      if(o.kind==='pudding'){give('food',40);mood(.3);this.en=100;SFX.oneup();pop(o.x,y,'PUDDING! SANITY UP','#ffd23f');}
+      else if(o.kind==='cosmic'){G.trip=360;give('food',30);give('water',30);give('caf',30);this.inv=360;mood(.45);this.ammo=Math.min(9,this.ammo+3);this.en=100;SFX.rush();pop(o.x,y,'COSMIC SNACK!','#ff7eb6');}
       else if(o.kind==='donut'){this.ammo=Math.min(9,this.ammo+2);give('food',12);this.en=Math.min(100,this.en+10);SFX.eat();pop(o.x,y,'+2 DONUTS','#ff7eb6');}
       else{this.en=Math.min(100,this.en+20);SFX.eat();
         if(o.kind==='coffee')give('caf',40);else if(o.kind==='water')give('water',45);else give('food',35);
@@ -619,7 +628,7 @@ const Run={
     this.shots=this.shots.filter(s=>!s.dead&&s.d<this.pd+240);
     this.st-=this.sp;if(this.st<=0)this.spawn();
     for(const o of this.objs){
-      if(o.type==='walker'){o.d-=.7*(1+.15*(Math.min(G.level,5)-1));o.wob+=.04;o.x=clamp(o.x+Math.sin(o.wob)*.4+(G.level>=2&&o.d>this.pd?clamp(this.px-o.x,-1,1)*(o.master?.6:.15):0),82,174);}
+      if(o.type==='walker'){o.d-=.8*(1+.15*(Math.min(G.level,5)-1));o.wob+=.04;o.x=clamp(o.x+Math.sin(o.wob)*.4+(G.level>=2&&o.d>this.pd?clamp(this.px-o.x,-1,1)*(o.master?.6:.15):0),82,174);}
       if(o.master&&G.level>=4&&Math.random()<.006){o.x=rnd(86,170);o.blink=12;}
       if(o.blink)o.blink--;
       if(o.type==='stapler'){o.d-=1.1;o.x=clamp(o.x+clamp(this.px-o.x,-1.2,1.2),82,174);}
@@ -673,7 +682,6 @@ const Brawl={
   },
   flip(){
     this.patWait=Math.max(40,170-Math.min(G.level,5)*25);   // Pat needs a moment to notice
-    if(G.level>=3)G.trip=Math.max(G.trip,90);
     this.gd*=-1;this.cd=90;G.shake=14;SFX.pow();
     pop(128,80,this.gd<0?'EVERYTHING FALLS UP!':'EVERYTHING FALLS DOWN!','#ff7eb6');
   },
@@ -708,7 +716,7 @@ const Brawl={
   },
   ai(p){
     const pcx=p.x+8,pcy=p.y+12,gd=this.gd;
-    if(--p.think<=0){p.think=30;p.lazy=Math.random()<Math.max(.05,.35-.07*G.level);}
+    if(--p.think<=0){p.think=30;p.lazy=Math.random()<Math.max(.03,.25-.06*G.level);}
     if(p.lazy)return[0,0,0,0,0];
     // gravity points at the red goal: get to a POW and flip it back
     if(this.patWait>0)this.patWait--;
@@ -732,7 +740,7 @@ const Brawl={
     if(p.gr&&above>30&&Math.abs(bcx-pcx)<50&&Math.random()<.07)J=1;
     if(p.gr&&p.hx&&Math.random()<.2)J=1;
     if(p.gr&&(bcx-pcx)*d<0&&Math.abs(pcx-bcx)<26&&Math.abs(pcy-bcy)<20)J=1;
-    if(Math.abs(bcx-pcx)<22&&Math.abs(bcy-pcy)<22&&p.kcd===0&&Math.random()<.06+.03*Math.min(G.level,5)){
+    if(Math.abs(bcx-pcx)<22&&Math.abs(bcy-pcy)<22&&p.kcd===0&&Math.random()<.08+.03*Math.min(G.level,5)){
       p.f=d;L=R=false;K=1;aim=gd>0?1:0;}
     // gravity already favors red: don't bump the brief by accident
     if(gd>0&&Math.abs(pcx-(this.brief.x+38))<46)J=0;
@@ -856,7 +864,7 @@ const Brawl={
     txt(pad6(G.score),10,229,'#f4f4f4',8,'left','#4a2a12');
     drawStats(70,230);
     for(const it of this.snacks||[])spr({water:WATER,caf:COFFEE,food:BURGER}[it.k],it.x,it.y+Math.round(Math.sin(frame/8)*2));
-    for(let i=0;i<G.lives;i++)drawImg(HEADS[8],W-18-i*10,228);
+    drawImg(HEADS[8],W-18,228);
     if(this.t<300&&!this.over&&(frame>>4)%4){txt('BLUE: SHOOT INTO RED',128,36,'#6fb7ff',8,'center');txt('RED: SHOOT INTO BLUE',128,204,'#e8433a',8,'center');txt('HIT THE BRIEF TO FLIP',128,148,'#ffd23f',8,'center');}
     if(this.over)txt(this.you>this.cpu?'YOU WIN!':'PAT WINS',128,76,this.you>this.cpu?'#ffd23f':'#e8433a',16,'center');
   }
@@ -871,7 +879,7 @@ const Kitchen={
     this.map=KMAP.map(r=>r.split(''));
     this.map.forEach((row,r)=>row.forEach((ch,c)=>{if(ch==='D')this.D={c,r};if(ch==='B')this.B={c,r};}));
     this.p={x:this.D.c*16+8,y:this.D.r*16+8,dir:[0,0],want:[0,0],freeze:0,rush:0,anim:0,face:1};
-    this.need=Math.min(3+G.level,8);this.got=0;this.time=90*60;this.won=0;this.puds=[];this.snacks=[];
+    this.need=Math.min(3+G.level,8);this.got=0;this.time=80*60;this.won=0;this.puds=[];this.snacks=[];
     for(let i=0;i<this.need;i++)this.placePud(6);
     this.cos=[];const n=Math.min(1+G.level,4);
     for(let i=0;i<n;i++)this.cos.push({x:this.B.c*16+8,y:this.B.r*16+8,dir:[0,0],rel:60+i*150,home:0,pal:CO_PALS[i]});
@@ -892,7 +900,7 @@ const Kitchen={
     let opts=dirs.filter(d=>this.walk(c+d[0],r+d[1])&&!(d[0]===-co.dir[0]&&d[1]===-co.dir[1]));
     if(!opts.length)opts=dirs.filter(d=>this.walk(c+d[0],r+d[1]));
     const dist=d=>Math.hypot(co.x+d[0]*16-this.p.x,co.y+d[1]*16-this.p.y);
-    const chase=co.stapler?.95:Math.min(.35+.1*G.level,.8);
+    const chase=co.stapler?.95:Math.min(.45+.1*G.level,.85);
     if(this.p.rush>0)opts.sort((a,b)=>dist(b)-dist(a));
     else if(Math.random()<chase)opts.sort((a,b)=>dist(a)-dist(b));
     else opts=[pick(opts)];
@@ -918,7 +926,7 @@ const Kitchen={
       if(p.dir[0]||p.dir[1])p.anim++;
     }
     // puddings
-    for(const q of this.puds){if(Math.abs(q.c*16+8-p.x)<9&&Math.abs(q.r*16+8-p.y)<9){q.dead=1;this.got++;p.rush=240;give('food',25);addScore(100);SFX.rush();if(G.level>=2)G.trip=Math.max(G.trip,G.level>=4?200:120);pop(p.x,p.y+4,this.got>=this.need?'ALL SET! TO DESK!':'SUGAR RUSH!','#f6e7a1');}}
+    for(const q of this.puds){if(Math.abs(q.c*16+8-p.x)<9&&Math.abs(q.r*16+8-p.y)<9){q.dead=1;this.got++;p.rush=240;give('food',25);addScore(100);SFX.rush();mood(.08);pop(p.x,p.y+4,this.got>=this.need?'ALL SET! TO DESK!':'SUGAR RUSH!','#f6e7a1');}}
     this.puds=this.puds.filter(q=>!q.dead);
     // snacks: keep one water, one coffee and one burger somewhere in the kitchen
     for(const k of['water','caf','food'])if(!this.snacks.some(q=>q.k===k)&&Math.random()<.01){
@@ -1108,7 +1116,7 @@ const MASTERPAL={B:'#9b59d0',H:'#f4f4f4',K:'#ff2a6a'};
 const Boss={
   init(){
     this.p={x:40,y:184,w:16,h:24,vx:0,vy:0,f:1,gr:false,hp:5,inv:0,anim:0,cd:0};
-    this.b={x:104,y:-80,w:48,h:72,hp:55,max:55,t:0,mode:'intro',mt:0,flash:0,vx:0};
+    this.b={x:104,y:-80,w:48,h:72,hp:65,max:65,t:0,mode:'intro',mt:0,flash:0,vx:0};
     this.ph=1;this.shots=[];this.bul=[];this.items=[];this.parts=[];this.over=0;this.itemT=480;this.burst=0;
     this.plats=[{x:24,y:152,w:64,h:6},{x:168,y:152,w:64,h:6},{x:96,y:108,w:64,h:6}];
   },
@@ -1220,7 +1228,7 @@ const Boss={
     // HUD
     ctx.fillStyle='#000';ctx.fillRect(0,0,W,26);
     txt('SC '+pad6(G.score),4,4,'#fff');drawStats(80,5);
-    for(let i=0;i<G.lives;i++)drawImg(HEADS[8],W-11-i*10,3);
+    drawImg(HEADS[8],W-11,3);
     txt('BOSS',44,16,'#e8433a',8,'right',null);
     ctx.fillStyle='#2a2440';ctx.fillRect(48,17,160,6);ctx.fillStyle=ph===3?'#ff7eb6':'#e8433a';ctx.fillRect(48,17,160*Math.max(0,b.hp)/b.max,6);
     for(let i=0;i<p.hp;i++)spr(HEART,6+i*9,226);
@@ -1247,7 +1255,9 @@ const Ending={
 
 /* trippy post-processing: wavy rows + colour cycling. Gets stronger later in the week */
 const fxCv=document.createElement('canvas');fxCv.width=W;fxCv.height=H;
-function weird(){
+function weird(){return scene===Boss&&Boss.ph===3?.6:0;
+}
+function weirdOld(){
   if(![Run,Brawl,Kitchen,DriveHome,Boss].includes(scene))return 0;
   const lv=G.level;return lv>=5?(Boss.ph===3?.8:.4):lv>=4?.6:lv>=3?.3:lv>=2&&scene===Run?.15:0;
 }
@@ -1279,19 +1289,19 @@ function postFX(){
 const STAGES=[['INTRO',()=>go(Intro)],['CUBICLE RUN',()=>go(Run)],['OBJECTIVE MAYHEM',()=>go(Brawl)],['PUDDING RUN',()=>go(Kitchen)],['DRIVE HOME',()=>go(DriveHome)],['FRIDAY BOSS',()=>go(Boss)],['ENDING',()=>go(Ending)]];
 const Dev={
   sel:0,day:1,
-  init(){G.dev=true;if(G.lives<1)G.lives=3;},
-  rows(){return[...STAGES.map(s=>s[0]),'INVINCIBLE: '+(G.god?'ON':'OFF'),'LIVES: '+G.lives,'TRIP MODE: '+(G.alwaysTrip?'ON':'OFF'),'BACK TO TITLE'];},
+  init(){G.dev=true;},
+  rows(){return[...STAGES.map(s=>s[0]),'INVINCIBLE: '+(G.god?'ON':'OFF'),'SANITY: '+Math.round(G.st.san),'TRIP MODE: '+(G.alwaysTrip?'ON':'OFF'),'BACK TO TITLE'];},
   update(){
     const n=this.rows().length,S=STAGES.length;
     if(pressed.up)this.sel=(this.sel+n-1)%n;
     if(pressed.down)this.sel=(this.sel+1)%n;
     if(pressed.left||pressed.right){const d=pressed.right?1:-1;
       if(this.sel<S)this.day=clamp(this.day+d,1,5);
-      else if(this.sel===S+1)G.lives=clamp(G.lives+d,1,9);}
+      else if(this.sel===S+1)G.st.san=clamp(Math.round(G.st.san/10)*10+d*10,0,100);}
     if(pressed.a||pressed.start||pressed.b){const i=this.sel;
       if(i<S){G.level=STAGES[i][0]==='FRIDAY BOSS'?5:this.day;STAGES[i][1]();}
       else if(i===S)G.god=!G.god;
-      else if(i===S+1)G.lives=G.lives%9+1;
+      else if(i===S+1)G.st.san=(Math.round(G.st.san/25)*25+25)%125;
       else if(i===S+2)G.alwaysTrip=!G.alwaysTrip;
       else go(Title);
       SFX.spawn();}
