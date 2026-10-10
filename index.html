@@ -389,7 +389,7 @@ const Title={
 /* ---------- intro: the desk ---------- */
 const Intro={
   init(){this.t=0;this.shown=0;this.bub=[];this.flash=0;},
-  end(){if(G.level>=5)return go(Banner,['FRIDAY 4:59 PM','THE FINAL BOSS','','ONE LAST MEETING','STANDS BETWEEN YOU','AND THE WEEKEND','','A = JUMP   B = THROW DONUT','HOLD UP + B = THROW UP','DODGE THE REPLY-ALLS'],()=>go(Boss),360);
+  end(){if(G.level>=5)return go(Banner,['FRIDAY 4:59 PM','ONE LAST RUN','','GET TO THE MEETING ROOM','THE SIGNS ARE ROTATED.','TURN THEM IN YOUR HEAD.','','THE BOSS IS WAITING.'],()=>go(Run),300);
     go(Banner,['ROUND 1','THE CUBICLE RUN','','RUN TO THE MEETING ROOM','TO DISCUSS THE TASK.','REMEMBER THE SIGN','TURN THAT WAY AT THE END','','GRAB DONUTS, THEN','A / SPACE = THROW ONE','DONUT A COWORKER = CLEAR','DODGE WORKFRONT PILES','UP = HUSTLE DOWN = EASE'],()=>go(Run),320);},
   update(){
     this.t++;
@@ -453,7 +453,7 @@ const WALKER2=[...WALKER.slice(0,8),"..P..K..","..K....."];
 const FOODS={burger:BURGER,donut:DONUT,coffee:COFFEE,pudding:PUD,cosmic:DONUT};
 const Run={
   init(){this.need=2+Math.min(G.level,4);this.turns=0;this.en=100;this.inv=0;this.slow=0;this.sp=0;this.px=128;this.done=0;this.turnAnim=0;this.anim=0;this.ammo=3;this.cd=0;this.newSeg(0);},
-  newSeg(back){this.pd=0;this.back=back;this.final=this.turns>=this.need;this.J=Math.round(rnd(560,800));this.correct=Math.random()<.5?-1:1;this.objs=[];this.shots=[];this.st=140;},
+  newSeg(back){this.pd=0;this.back=back;this.final=this.turns>=this.need;this.J=Math.round(rnd(560,800))+(Math.min(G.level,5)-1)*90;this.signSeen=null;this.signRot=pick([Math.PI,Math.PI/2,-Math.PI/2]);this.correct=Math.random()<.5?-1:1;this.objs=[];this.shots=[];this.st=140;},
   endD(){return this.final?this.J+24:this.J+56;},
   open(d,side){if(!this.final&&d>=this.J-56&&d<=this.J+56)return true;return this.back===side&&d>=-56&&d<=56;},
   cellOpen(lo,hi,side){if(!this.final&&hi>this.J-62&&lo<this.J+62)return true;return this.back===side&&hi>-62&&lo<62;},
@@ -492,9 +492,19 @@ const Run={
     if(this.back>0){hw(56,ox+190,w);hw(-62,ox+190,w);}
     if(!this.final){
       const lab=this.correct<0?'< MEETING ROOM':'MEETING ROOM >';
-      const sign=(cx,sy)=>{ctx.fillStyle='#0d0b14';ctx.fillRect(cx-60,sy,120,14);ctx.fillStyle='#ffd23f';ctx.fillRect(cx-59,sy+1,118,12);txt(lab,cx,sy+3,'#0d0b14',8,'center',null);};
+      // the sign gets harder to read as the week goes on:
+      // day 3 it fades away, day 4 it flips back and forth (mirrored half the time), day 5 it's rotated
+      const sign=(cx,sy)=>{const lv=Math.min(G.level,5);let a=1;
+        if(lv>=3){if(this.signSeen==null&&sy>20&&sy<H-20)this.signSeen=frame;
+          if(this.signSeen!=null)a=clamp(1-(frame-this.signSeen-[0,0,50,70,80][lv-1])/40,0,1);}
+        if(a<=0)return;
+        ctx.save();ctx.globalAlpha=a;ctx.translate(cx,sy+7);
+        if(lv===4){const c=Math.cos(frame*.07);ctx.scale(Math.abs(c)<.05?.05*Math.sign(c||1):c,1);}
+        if(lv>=5)ctx.rotate(this.signRot);
+        ctx.fillStyle='#0d0b14';ctx.fillRect(-60,-7,120,14);ctx.fillStyle='#ffd23f';ctx.fillRect(-59,-6,118,12);txt(lab,0,-4,'#0d0b14',8,'center',null);
+        ctx.restore();};
       // one sign per hallway, mid-run. Nothing at the turn: you have to remember it.
-      sign(ox+128,Y(Math.round(this.J*.45)));
+      sign(ox+128,Y(Math.round(this.J*[.45,.35,.27,.2,.16][Math.min(G.level,5)-1])));
     }else{
       const dy=Y(end+6);
       ctx.fillStyle='#7a4a24';ctx.fillRect(ox+108,dy-22,40,28);ctx.fillStyle='#5a3418';ctx.fillRect(ox+112,dy-18,32,24);
@@ -547,7 +557,7 @@ const Run={
     this.drawWorld(512,512,128,256);this.drawObjs(128,256);ctx=keep;
   },
   update(){
-    if(this.done){this.done++;if(this.done>100)go(Banner,['ROUND 2','OBJECTIVE MAYHEM','','YOU ARE BLUE. PAT IS RED.','BLUE: BALLS INTO RED (TOP)','RED: BALLS INTO BLUE (FLOOR)','','HIT THE BRIEF = FLIP GRAVITY','BALLS FALL THE OTHER WAY','THE BRIEF MOVES EVERY TIME','BONKED? BALLS GO THROUGH YOU','','A JUMP  B KICK  UP/DN AIM'],()=>go(Brawl),360);return;}
+    if(this.done){this.done++;if(this.done>100&&G.level>=5)return go(Banner,['FRIDAY 4:59 PM','THE FINAL BOSS','','ONE LAST MEETING','STANDS BETWEEN YOU','AND THE WEEKEND','','A = JUMP   B = THROW DONUT','HOLD UP + B = THROW UP','DODGE THE REPLY-ALLS'],()=>go(Boss),360);if(this.done>100)go(Banner,['ROUND 2','OBJECTIVE MAYHEM','','YOU ARE BLUE. PAT IS RED.','BLUE: BALLS INTO RED (TOP)','RED: BALLS INTO BLUE (FLOOR)','','HIT THE BRIEF = FLIP GRAVITY','BALLS FALL THE OTHER WAY','THE BRIEF MOVES EVERY TIME','BONKED? BALLS GO THROUGH YOU','','A JUMP  B KICK  UP/DN AIM'],()=>go(Brawl),360);return;}
     if(this.turnAnim){if(++this.turnAnim>26){this.turnAnim=0;this.newSeg(this.turnDir);this.px=128;}return;}
     const near=this.J-this.pd;
     let tgt=(keys.up?2.6:keys.down?.8:1.6)*(1+G.mood*.12);
