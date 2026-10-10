@@ -371,7 +371,7 @@ function syncMood(){const b=G.mood;G.mood=(G.st.san-50)/50;
   if(b>-.35&&G.mood<=-.35)pop(128,60,'GOING ZOMBIE...','#9ccf84');
   if(b>-.85&&G.mood<=-.85)pop(128,60,'FULL ZOMBIE','#9ccf84');}
 for(const[k,v]of[['hit',-.18],['trap',-.2],['boo',-.18],['die',-.3]]){const f=SFX[k];SFX[k]=()=>{mood(v);f();};}
-Object.defineProperty(G,'level',{get(){return Math.min(5,G.day+G.week-1);},set(v){G.day=clamp(v,1,5);}});
+Object.defineProperty(G,'level',{get(){return G.day;},set(v){G.day=clamp(v,1,5);}});
 function addScore(n){if(n>0)mood(Math.min(n,600)/6000);G.score=Math.max(0,G.score+n);if(G.score>G.hi){G.hi=G.score;try{localStorage.setItem('cpm-hi',String(G.hi))}catch(e){}}}
 const pad6=n=>String(n).padStart(6,'0');
 let pops=[];
@@ -574,7 +574,7 @@ const Run={
     for(const s of this.shots)spr(DONUT,s.x+ox-4,oy-(s.d-this.pd)-4,{flip:(frame>>2)%2===1});
   },
   spawn(){
-    const d=this.pd+215;this.st=rnd(44,88)-Math.min(G.level*4,20)-Math.min((G.week-1)*4,16);
+    const d=this.pd+215;this.st=rnd(44,88)-Math.min(G.level*4,20);
     if(d>this.J-90)return;
     const r=Math.random();let type=r<.2?'food':r<.5?'paper':r<.8?'walker':'crosser';
     if(G.level>=3&&Math.random()<(G.level>=4?.22:.08))type='stapler';
@@ -756,7 +756,7 @@ const Brawl={
     else if(!p.cpu){L=keys.left;R=keys.right;J=pressed.a;K=pressed.b;aim=keys.up?-1:keys.down?1:0;}
     else[L,R,J,K,aim]=this.ai(p);
     p.aim=aim;
-    const sp=p.cpu?1.2+.1*Math.min(G.level,6)+.06*Math.min(G.week-1,5):2.2*(1+G.mood*.1)*(1+G.st.caf/600),dir=(R?1:0)-(L?1:0);
+    const sp=p.cpu?1.2+.1*Math.min(G.level,6):2.2*(1+G.mood*.1)*(1+G.st.caf/600),dir=(R?1:0)-(L?1:0);
     p.vx+=(dir*sp-p.vx)*.3;if(dir)p.f=dir;
     if(J&&p.gr){p.vy=-gd*7.2;p.gr=false;if(!p.cpu)SFX.jump();}
     p.vy=clamp(p.vy+.32*gd,-8,8);
@@ -884,7 +884,7 @@ const Kitchen={
     this.map=KMAP.map(r=>r.split(''));
     this.map.forEach((row,r)=>row.forEach((ch,c)=>{if(ch==='D')this.D={c,r};if(ch==='B')this.B={c,r};}));
     this.p={x:this.D.c*16+8,y:this.D.r*16+8,dir:[0,0],want:[0,0],freeze:0,rush:0,anim:0,face:1};
-    this.need=Math.min(3+G.level,8);this.got=0;this.time=Math.max(55,80-5*(G.week-1))*60;this.won=0;this.puds=[];this.snacks=[];
+    this.need=Math.min(3+G.level,8);this.got=0;this.time=80*60;this.won=0;this.puds=[];this.snacks=[];
     for(let i=0;i<this.need;i++)this.placePud(6);
     this.cos=[];const n=Math.min(1+G.level,4);
     for(let i=0;i<n;i++)this.cos.push({x:this.B.c*16+8,y:this.B.r*16+8,dir:[0,0],rel:60+i*150,home:0,pal:CO_PALS[i]});
@@ -1043,7 +1043,8 @@ const Calendar={
     ctx.fillStyle='#e8433a';ctx.fillRect(x,y,128,26);txt(MONTHS[d.getMonth()],x+64,y+6,'#f4f4f4',16,'center','#5a0f14');
     txt(String(d.getDate()),x+64,y+40,'#0d0b14',32,'center',null);
     txt(WEEKDAY[day-1],x+64,y+84,'#e8433a',8,'center',null);
-    txt('WEEK '+wk,x+64,y+100,'#8a8aa0',8,'center',null);
+    txt('WEEK '+wk,x+44,y+100,'#8a8aa0',8,'center',null);
+    {const step=(day+1)/2;for(let i=0;i<3;i++){ctx.fillStyle=i<step?['#5bc248','#ffd23f','#e8433a'][i]:'#c9c4b5';ctx.fillRect(x+84+i*10,y+100,8,8);}}
   },
   draw(){
     ctx.fillStyle='#2b2342';ctx.fillRect(0,0,W,H);ctx.fillStyle='#231c37';for(let x=0;x<W;x+=32)ctx.fillRect(x,0,2,H);
@@ -1055,7 +1056,7 @@ const Calendar={
     for(let i=0;i<5;i++){ctx.fillStyle='#8a8aa0';ctx.fillRect(x+12+i*24,y-10,4,12);}
     txt("TODAY:",20,150,'#ffd23f',8,'left');
     this.plan.forEach((k,i)=>txt((i+1)+'. '+STAGE_NAME[k],72,150+i*11,k==='boss'?'#e8433a':'#f4f4f4',8,'left',null));
-    if(this.isNew&&(this.t>>4)%2)txt('NEW THIS WEEK: '+this.isNew+'!',128,212,'#ff7eb6',8,'center');
+    if(this.isNew&&(this.t>>4)%2)txt('NEW THIS WEEK: '+this.isNew+'!',128,214,'#ff7eb6',8,'center');
     if(this.t>45&&(this.t>>4)%2)txt('PRESS A',128,228,'#8f89a8',8,'center',null);
   }
 };
@@ -1294,7 +1295,7 @@ const MASTERPAL={B:'#9b59d0',H:'#f4f4f4',K:'#ff2a6a'};
 const Boss={
   init(){
     this.p={x:40,y:184,w:16,h:24,vx:0,vy:0,f:1,gr:false,hp:5,inv:0,anim:0,cd:0};
-    this.b={x:104,y:-80,w:48,h:72,hp:65+10*(G.week-1),max:65+10*(G.week-1),t:0,mode:'intro',mt:0,flash:0,vx:0};
+    this.b={x:104,y:-80,w:48,h:72,hp:65,max:65,t:0,mode:'intro',mt:0,flash:0,vx:0};
     this.ph=1;this.shots=[];this.bul=[];this.items=[];this.parts=[];this.over=0;this.itemT=480;this.burst=0;
     this.plats=[{x:24,y:152,w:64,h:6},{x:168,y:152,w:64,h:6},{x:96,y:108,w:64,h:6}];
   },
