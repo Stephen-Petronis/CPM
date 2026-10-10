@@ -1025,7 +1025,7 @@ function dateLabel(){const d=dateOf(G.week,G.day);return MONTHS[d.getMonth()].sl
 function planFor(){const g=GAMES.slice(0,Math.min(G.week,GAMES.length)).map(x=>x[0]);return G.day>=5?[...g,'boss']:[...g,'drive'];}
 function advance(){
   G.plan=G.plan||[];G.si=(G.si==null?-1:G.si)+1;const name=G.plan[G.si];
-  if(!name){G.day=Math.min(5,G.day+1);return go(Calendar);}
+  if(!name){G.day=Math.min(5,G.day+2);return go(Calendar);}   // 3-day weeks: monday, wednesday, friday
   const scene={run:Run,brawl:Brawl,kitchen:Kitchen,meeting:Meeting,drive:DriveHome,boss:Boss}[name];
   const info=STAGE_INFO[name],l=[name==='boss'||name==='drive'?info[0]:'TASK '+(G.si+1),...info.slice(1)];
   const start=()=>name==='meeting'?go(Meeting,advance):go(scene);
@@ -1034,7 +1034,7 @@ function advance(){
 }
 const Calendar={
   init(){this.t=0;this.first=G.week===1&&G.day===1;this.plan=planFor();
-    this.date=dateOf(G.week,G.day);this.prev=dateOf(G.week-(G.day===1?1:0),G.day===1?5:G.day-1);
+    this.date=dateOf(G.week,G.day);this.prev=dateOf(G.week-(G.day===1?1:0),G.day===1?5:G.day-2);
     this.isNew=G.day===1&&G.week>1&&G.week<=GAMES.length?GAMES[G.week-1][1]:null;SFX.paper();},
   update(){this.t++;if((this.t>45&&(pressed.a||pressed.start))||this.t>480){G.plan=this.plan;G.si=-1;go(Intro);}},
   page(d,day,x,y,wk=G.week){
@@ -1050,7 +1050,7 @@ const Calendar={
     ctx.fillStyle='#0d0b14';ctx.fillRect(x-4,y-6,136,10);
     this.page(this.date,G.day,x,y);
     if(!this.first&&this.t<50){const k=this.t;ctx.save();ctx.translate(x,y+4);ctx.rotate(-k*.03);ctx.translate(-k*1.2,k*k*.12);
-      this.page(this.prev,G.day===1?5:G.day-1,0,-4,G.day===1?G.week-1:G.week);ctx.restore();}
+      this.page(this.prev,G.day===1?5:G.day-2,0,-4,G.day===1?G.week-1:G.week);ctx.restore();}
     for(let i=0;i<5;i++){ctx.fillStyle='#8a8aa0';ctx.fillRect(x+12+i*24,y-10,4,12);}
     txt("TODAY:",20,150,'#ffd23f',8,'left');
     this.plan.forEach((k,i)=>txt((i+1)+'. '+STAGE_NAME[k],72,150+i*11,k==='boss'?'#e8433a':'#f4f4f4',8,'left',null));
