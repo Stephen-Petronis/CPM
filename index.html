@@ -123,7 +123,7 @@ function drawImg(im,x,y,fx,fy){
   if(!fx&&!fy){ctx.drawImage(im,x,y);return;}
   ctx.save();ctx.translate(x+(fx?w:0),y+(fy?h:0));ctx.scale(fx?-1:1,fy?-1:1);ctx.drawImage(im,0,0);ctx.restore();}
 // the week takes its toll: from Tuesday on, the hero's face gets more and more possessed
-function heroMood(){return typeof scene!=='undefined'&&[Intro,Run,Brawl,Kitchen,DriveHome,Boss].includes(scene)?G.mood:0;}
+function heroMood(){return typeof scene!=='undefined'&&[Intro,Run,Brawl,Kitchen,DriveHome,Boss,Schedule].includes(scene)?G.mood:0;}
 function zombie(){const m=heroMood();return m<-.85?4:m<-.6?3:m<-.35?2:m<-.15?1:0;}
 function god(){const m=heroMood();return m>.8?3:m>.6?2:m>.35?1:0;}
 function craze(){return zombie();}
@@ -318,7 +318,7 @@ document.querySelectorAll('[data-k]').forEach(b=>{
   ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>b.addEventListener(ev,()=>{b.classList.remove('on');release(k);}));
   b.addEventListener('contextmenu',e=>e.preventDefault());
 });
-cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();G.tap={x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height};if(scene===Meeting)return;press('start');setTimeout(()=>release('start'),50);});
+cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();G.tap={x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height};if(scene===Meeting||scene===Schedule||scene===Upgrade)return;press('start');setTimeout(()=>release('start'),50);});
 const muteBtn=document.getElementById('mute');
 let soundMode=0;
 muteBtn.addEventListener('click',()=>{audioInit();soundMode=(soundMode+1)%3;G.mute=soundMode===2;G.musicOff=soundMode>=1;muteBtn.textContent=['SOUND ON','MUSIC OFF','SOUND OFF'][soundMode];});
@@ -338,7 +338,7 @@ const ICONS={
 const STAT_COL={food:'#f08a24',water:'#6fb7ff',caf:'#c98a4b',san:'#ff7eb6'};
 function freshStats(){G.st={food:80,water:80,caf:60,san:50};}
 function give(k,n){G.st[k]=clamp(G.st[k]+n,0,100);}
-function statScene(){return[Run,Brawl,Kitchen,DriveHome,Boss].includes(scene);}
+function statScene(){return[Run,Brawl,Kitchen,DriveHome,Boss,Schedule].includes(scene);}
 function updStats(){
   const s=G.st,pv={...s};
   s.food=Math.max(0,s.food-.007*(perk('stomach')?.65:1));
@@ -1012,12 +1012,129 @@ function drawStapler(x,y,s=1){
   ctx.restore();
   if(open){ctx.fillStyle='#f4f4f4';ctx.fillRect(x-7*s,y+s,2*s,s);ctx.fillRect(x-3*s,y+s,2*s,s);}
 }
+/* ---------- week 5: scheduling ----------
+   a week-calendar grid. fit every meeting block (tetris-style pieces) in with no gaps.
+   gray blocks are already locked in as guides. puzzles are made by cutting a full grid
+   into pieces, so there is always a perfect solution. */
+const SCHED_COLS=['#e8433a','#2f6fd6','#5bc248','#ffd23f','#ff7eb6','#f08a24','#3fb1a0','#9b59d0','#6fb7ff','#c98a4b','#e9c46a','#8fe3ff'];
+function rotShape(sh){const r=sh.map(([x,y])=>[-y,x]);const mx=Math.min(...r.map(c=>c[0])),my=Math.min(...r.map(c=>c[1]));return r.map(([x,y])=>[x-mx,y-my]);}
+function genPuzzle(w,h,lv){
+  const N=[[1,0],[-1,0],[0,1],[0,-1]];
+  for(let tries=0;tries<400;tries++){
+    const g=Array(w*h).fill(-1),P=[];
+    for(let i=0;i<w*h;i++){if(g[i]>=0)continue;
+      const id=P.length,cells=[i];g[i]=id;const target=pick(lv<=1?[3,3,4,4]:lv<=2?[3,4,4,4,5]:[3,4,4,5,5]);
+      while(cells.length<target){const fr=[];
+        for(const c of cells){const cx=c%w,cy=(c/w)|0;for(const[dx,dy]of N){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const n=ny*w+nx;if(g[n]<0&&!fr.includes(n))fr.push(n);}}
+        if(!fr.length)break;const n=pick(fr);g[n]=id;cells.push(n);}
+      P.push(cells);}
+    let bad=false;
+    for(let k=0;k<P.length;k++){if(P[k].length!==1)continue;const c=P[k][0],cx=c%w,cy=(c/w)|0;let into=-1;
+      for(const[dx,dy]of N){const nx=cx+dx,ny=cy+dy;if(nx<0||ny<0||nx>=w||ny>=h)continue;const j=g[ny*w+nx];if(j!==k&&P[j].length>=2&&P[j].length<5){into=j;break;}}
+      if(into<0){bad=true;break;}P[into].push(c);g[c]=into;P[k]=[];}
+    if(bad)continue;
+    const out=P.filter(c=>c.length).map(cells=>{const xs=cells.map(c=>c%w),ys=cells.map(c=>(c/w)|0),mx=Math.min(...xs),my=Math.min(...ys);
+      return{sol:{x:mx,y:my,shape:cells.map(c=>[c%w-mx,((c/w)|0)-my])}};});
+    if(out.length>=3)return out;
+  }
+}
+const Schedule={
+  GX:28,GY:40,CS:20,
+  init(){
+    const lv=Math.min(G.level,5),d=[[4,4],[5,4],[5,5],[6,5],[6,6]][lv-1];this.w=d[0];this.h=d[1];this.lv=lv;
+    this.pieces=genPuzzle(this.w,this.h,lv);const n=this.pieces.length;
+    let fixed=Math.ceil(n*[.5,.35,.25,.2,.15][lv-1]);fixed=Math.min(n-1,Math.max(fixed,n-8,1));
+    const ids=[...Array(n).keys()];for(let i=n-1;i>0;i--){const j=Math.random()*(i+1)|0;[ids[i],ids[j]]=[ids[j],ids[i]];}
+    this.grid=Array(this.w*this.h).fill(-1);this.tray=[];
+    ids.forEach((id,k)=>{const p=this.pieces[id];p.col=SCHED_COLS[id%SCHED_COLS.length];
+      if(k<fixed){p.fixed=true;for(const[x,y]of p.sol.shape)this.grid[(p.sol.y+y)*this.w+p.sol.x+x]=id;}
+      else{let sh=p.sol.shape.map(c=>[...c]);for(let r=Math.random()*4|0;r>0;r--)sh=rotShape(sh);p.shape=sh;this.tray.push(id);}});
+    this.placed={};this.held=null;this.ax=0;this.ay=0;this.t=0;this.done=0;this.rep={};
+    this.CS=Math.min(28,Math.floor(120/this.w));
+    this.limit=[45,60,75,90,100][lv-1]*60;this.holdNext();
+  },
+  dims(sh){return[Math.max(...sh.map(c=>c[0]))+1,Math.max(...sh.map(c=>c[1]))+1];},
+  clampA(){if(this.held==null)return;const[sw,sh]=this.dims(this.pieces[this.held].shape);this.ax=clamp(this.ax,0,this.w-sw);this.ay=clamp(this.ay,0,this.h-sh);},
+  fits(sh,ax,ay){return sh.every(([x,y])=>{const X=ax+x,Y=ay+y;return X>=0&&Y>=0&&X<this.w&&Y<this.h&&this.grid[Y*this.w+X]<0;});},
+  holdNext(){this.held=this.tray.length?this.tray.shift():null;this.clampA();},
+  tryPlace(){
+    const id=this.held;if(id==null)return;const p=this.pieces[id];
+    if(this.fits(p.shape,this.ax,this.ay)){
+      for(const[x,y]of p.shape)this.grid[(this.ay+y)*this.w+this.ax+x]=id;
+      this.placed[id]={x:this.ax,y:this.ay};SFX.kick();mood(.04);this.holdNext();
+      if(this.grid.every(v=>v>=0)){this.done=1;this.held=null;SFX.goal();const secs=this.t/60|0;
+        addScore(1500+Math.max(0,(this.limit/60|0)-secs)*25);mood(.25);}
+      return;}
+    // landed on a block you placed earlier? swap them
+    const hit=new Set();for(const[x,y]of p.shape){const X=this.ax+x,Y=this.ay+y;if(X<0||Y<0||X>=this.w||Y>=this.h)continue;const v=this.grid[Y*this.w+X];if(v>=0&&!this.pieces[v].fixed)hit.add(v);}
+    if(hit.size){const k=[...hit][0],q=this.placed[k];
+      for(let i=0;i<this.grid.length;i++)if(this.grid[i]===k)this.grid[i]=-1;
+      delete this.placed[k];this.tray.unshift(id);this.held=k;this.ax=q.x;this.ay=q.y;SFX.whiff();pop(128,30,'SWAPPED','#8fe3ff');return;}
+    SFX.bump();
+  },
+  rp(k){if(pressed[k]){this.rep[k]=0;return true;}if(keys[k]){this.rep[k]=(this.rep[k]||0)+1;if(this.rep[k]>14&&this.rep[k]%5===0)return true;}return false;},
+  slot(i){return{x:156+(i%2)*48,y:40+(i/2|0)*44,w:44,h:40};},
+  update(){
+    this.t++;
+    if(this.done){this.done++;G.tap=null;if(this.done>130)advance();return;}
+    if(this.t>this.limit&&(this.t-this.limit)%300===0){mood(-.06);pop(128,30,'RUNNING LATE...','#9ccf84');}
+    if(G.tap){const tp=G.tap;G.tap=null;
+      for(let i=0;i<this.tray.length;i++){const s=this.slot(i);if(tp.x>=s.x&&tp.x<s.x+s.w&&tp.y>=s.y&&tp.y<s.y+s.h){
+        const id=this.tray.splice(i,1)[0];if(this.held!=null)this.tray.splice(i,0,this.held);this.held=id;this.clampA();SFX.spawn();return;}}
+      const gx=Math.floor((tp.x-this.GX)/this.CS),gy=Math.floor((tp.y-this.GY)/this.CS);
+      if(this.held!=null&&gx>=0&&gy>=0&&gx<this.w&&gy<this.h){this.ax=gx;this.ay=gy;this.clampA();this.tryPlace();}
+      return;}
+    if(this.held==null)return;
+    const p=this.pieces[this.held];
+    if(this.rp('left'))this.ax--;if(this.rp('right'))this.ax++;if(this.rp('up'))this.ay--;if(this.rp('down'))this.ay++;
+    if(pressed.b){p.shape=rotShape(p.shape);SFX.spawn();}
+    this.clampA();
+    if(pressed.a)this.tryPlace();
+    else if(pressed.start&&this.tray.length){this.tray.push(this.held);this.holdNext();SFX.whiff();}
+  },
+  cell(x,y,s,col,fixed){
+    ctx.fillStyle=col;ctx.fillRect(x+1,y+1,s-2,s-2);
+    ctx.fillStyle='rgba(255,255,255,.28)';ctx.fillRect(x+1,y+1,s-2,Math.max(1,s/8));
+    ctx.fillStyle='rgba(0,0,0,.25)';ctx.fillRect(x+1,y+s-1-Math.max(1,s/8),s-2,Math.max(1,s/8));
+    if(fixed){ctx.fillStyle='rgba(0,0,0,.25)';for(let i=2;i<s-2;i+=4)ctx.fillRect(x+i,y+2,1,s-4);}
+  },
+  draw(){
+    const GX=this.GX,GY=this.GY,CS=this.CS;
+    ctx.fillStyle='#16142a';ctx.fillRect(0,0,W,H);
+    hud('');
+    txt('SCHEDULING',GX+this.w*CS/2,22,'#ffd23f',8,'center');
+    ['M','T','W','T','F','S'].slice(0,this.w).forEach((d,i)=>txt(d,GX+i*CS+CS/2,GY-10,'#8f89a8',8,'center',null));
+    ['9','10','11','12','1','2'].slice(0,this.h).forEach((h,j)=>txt(h,GX-3,GY+j*CS+6,'#8f89a8',8,'right',null));
+    for(let y=0;y<this.h;y++)for(let x=0;x<this.w;x++){const v=this.grid[y*this.w+x],X=GX+x*CS,Y=GY+y*CS;
+      if(v<0){ctx.fillStyle='#231e36';ctx.fillRect(X,Y,CS,CS);ctx.fillStyle='#3a3452';ctx.fillRect(X,Y,CS,1);ctx.fillRect(X,Y,1,CS);}
+      else{const p=this.pieces[v];this.cell(X,Y,CS,p.fixed?'#6e6888':p.col,p.fixed);}}
+    ctx.fillStyle='#3a3452';ctx.fillRect(GX,GY+this.h*CS,this.w*CS,1);ctx.fillRect(GX+this.w*CS,GY,1,this.h*CS);
+    if(this.held!=null){const p=this.pieces[this.held],ok=this.fits(p.shape,this.ax,this.ay);
+      if(this.t>this.limit*.6&&(frame>>4)%2){ctx.fillStyle='rgba(255,210,63,.35)';for(const[x,y]of p.sol.shape)ctx.fillRect(GX+(p.sol.x+x)*CS+3,GY+(p.sol.y+y)*CS+3,CS-6,CS-6);}
+      ctx.globalAlpha=.85;for(const[x,y]of p.shape)this.cell(GX+(this.ax+x)*CS,GY+(this.ay+y)*CS,CS,p.col,false);ctx.globalAlpha=1;
+      if(!ok&&(frame>>2)%2){ctx.fillStyle='#e8433a';for(const[x,y]of p.shape){const X=GX+(this.ax+x)*CS,Y=GY+(this.ay+y)*CS;ctx.fillRect(X,Y,CS,2);ctx.fillRect(X,Y+CS-2,CS,2);ctx.fillRect(X,Y,2,CS);ctx.fillRect(X+CS-2,Y,2,CS);}}}
+    // the meetings still to place
+    txt('TO DO',202,24,'#f4f4f4',8,'center',null);
+    this.tray.slice(0,8).forEach((id,i)=>{const s=this.slot(i),p=this.pieces[id],[sw,sh]=this.dims(p.shape),c=8;
+      ctx.fillStyle='#231e36';ctx.fillRect(s.x,s.y,s.w,s.h);
+      const ox=s.x+(s.w-sw*c)/2,oy=s.y+(s.h-sh*c)/2;for(const[x,y]of p.shape)this.cell(ox+x*c,oy+y*c,c,p.col,false);});
+    if(this.tray.length>8)txt('+'+(this.tray.length-8),202,220,'#8f89a8',8,'center',null);
+    const secs=this.t/60|0,late=this.t>this.limit;
+    txt((late?'LATE ':'')+secs+'s',GX,GY+this.h*CS+8,late?'#e8433a':'#8f89a8',8,'left',null);
+    if(this.t>this.limit*.6&&this.held!=null)txt('HINT SHOWN',GX+this.w*CS,GY+this.h*CS+8,'#ffd23f',8,'right',null);
+    txt('A PLACE  B ROTATE  START NEXT',128,228,'#8f89a8',8,'center',null);
+    if(this.done){for(let i=0;i<30;i++){ctx.fillStyle=SCHED_COLS[i%SCHED_COLS.length];ctx.fillRect((i*53+this.done*3)%W,(i*37+this.done*(2+i%3))%H,3,3);}
+      txt('CALENDAR LOCKED IN!',128,96,'#ffd23f',8,'center','#0d0b14');}
+  }
+};
+
 /* ---------- the calendar: weeks, days, and the plan for each day ----------
    week 1: cubicle run -> drive home. each new week adds the next task to every day.
    friday ends the week with the boss instead of the drive. */
-const GAMES=[['run','CUBICLE RUN'],['brawl','OBJECTIVE MAYHEM'],['kitchen','PUDDING RUN'],['meeting','LEADERSHIP MTG']];
-const STAGE_NAME={run:'CUBICLE RUN',brawl:'OBJECTIVE MAYHEM',kitchen:'PUDDING RUN',meeting:'LEADERSHIP MTG',drive:'DRIVE HOME',boss:'THE FRIDAY BOSS'};
+const GAMES=[['run','CUBICLE RUN'],['brawl','OBJECTIVE MAYHEM'],['kitchen','PUDDING RUN'],['meeting','LEADERSHIP MTG'],['sched','SCHEDULING']];
+const STAGE_NAME={run:'CUBICLE RUN',brawl:'OBJECTIVE MAYHEM',kitchen:'PUDDING RUN',meeting:'LEADERSHIP MTG',sched:'SCHEDULING',drive:'DRIVE HOME',boss:'THE FRIDAY BOSS'};
 const STAGE_INFO={run:['','THE CUBICLE RUN','','RUN TO THE MEETING ROOM','TO DISCUSS THE TASK.','REMEMBER THE SIGN','TURN THAT WAY AT THE END','','GRAB DONUTS, THEN','A / SPACE = THROW ONE','DONUT A COWORKER = CLEAR','DODGE WORKFRONT PILES','UP = HUSTLE DOWN = EASE'],brawl:['','OBJECTIVE MAYHEM','','YOU ARE BLUE. PAT IS RED.','BLUE: BALLS INTO RED (TOP)','RED: BALLS INTO BLUE (FLOOR)','','HIT THE BRIEF = FLIP GRAVITY','BALLS FALL THE OTHER WAY','THE BRIEF MOVES EVERY TIME','BONKED? BALLS GO THROUGH YOU','','A JUMP  B KICK  UP/DN AIM'],kitchen:['','PUDDING RUN','','GRAB EVERY BANANA CREAM','PIE PUDDING IN THE KITCHEN','THEN GET BACK TO YOUR DESK','','PUDDING = SUGAR RUSH','SEND COWORKERS BACK','TO WORK'],meeting:['','LEADERSHIP MEETING','','PAPER ROCK SCISSORS 1-2-3-4-5','EVERYONE THROWS ONE CARD','ROCK>SCISSORS>PAPER>ROCK','WINNING SIGN: HIGH NUMBER TAKES','ALL SAME / ALL 3 SIGNS:','HIGHEST NUMBER TAKES IT','TIE? CARDS CARRY OVER','MOST CARDS WINS. BIG STAKES.'],
+  sched:['','SCHEDULING','','FIT EVERY MEETING INTO','THE WEEK. NO GAPS.','GRAY BLOCKS ARE LOCKED IN','','ARROWS MOVE   A PLACES','B ROTATES   START = NEXT','OR TAP A BLOCK, THEN TAP','WHERE IT GOES'],
   drive:['5:00 PM','DRIVE HOME','','OVERTIME IS RIGHT','BEHIND YOU. GO!','','UP = GAS  DOWN = BRAKE','ARROWS = BOOST','COFFEE = NITRO','WATER KEEPS YOU GOING'],
   boss:['FRIDAY 4:59 PM','THE FINAL BOSS','','ONE LAST MEETING','STANDS BETWEEN YOU','AND THE WEEKEND','','A = JUMP   B = THROW DONUT','HOLD UP + B = THROW UP','DODGE THE REPLY-ALLS']};
 const WEEKDAY=['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'];
@@ -1028,7 +1145,7 @@ function planFor(){const g=GAMES.slice(0,Math.min(G.week,GAMES.length)).map(x=>x
 function advance(){
   G.plan=G.plan||[];G.si=(G.si==null?-1:G.si)+1;const name=G.plan[G.si];
   if(!name){G.day=Math.min(5,G.day+2);return go(Calendar);}   // 3-day weeks: monday, wednesday, friday
-  const scene={run:Run,brawl:Brawl,kitchen:Kitchen,meeting:Meeting,drive:DriveHome,boss:Boss}[name];
+  const scene={run:Run,brawl:Brawl,kitchen:Kitchen,meeting:Meeting,sched:Schedule,drive:DriveHome,boss:Boss}[name];
   const info=STAGE_INFO[name],l=[name==='boss'||name==='drive'?info[0]:'TASK '+(G.si+1),...info.slice(1)];
   const start=()=>name==='meeting'?go(Meeting,advance):go(scene);
   if(name==='run'&&G.week===1&&G.day===1&&!G.saneShown){G.saneShown=1;return go(Banner,['STAY SANE','','WATCH THE 4 METERS UP TOP','FOOD   WATER   COFFEE','KEEP ALL THREE UP','COFFEE = FASTER, BUT THIRSTY','','ANY RUNNING LOW = SANITY DROPS','LOW SANITY = ZOMBIE','HIGH SANITY = BUFF GOD'],()=>go(Banner,l,start,320),320);}
@@ -1536,7 +1653,7 @@ function weirdOld(){
   if(![Run,Brawl,Kitchen,DriveHome,Boss].includes(scene))return 0;
   const lv=G.level;return lv>=5?(Boss.ph===3?.8:.4):lv>=4?.6:lv>=3?.3:lv>=2&&scene===Run?.15:0;
 }
-function moodScene(){return[Intro,Run,Brawl,Kitchen,DriveHome,Boss].includes(scene);}
+function moodScene(){return[Intro,Run,Brawl,Kitchen,DriveHome,Boss,Schedule].includes(scene);}
 function postFX(){
   const k0=weird(),trip=G.trip>0,m=moodScene()?G.mood:0,low=m<-.3?(-m-.3)/.7:0,k=Math.max(k0,low*.8);
   if(k>0||trip){
@@ -1561,7 +1678,7 @@ function postFX(){
 }
 
 /* ---------- dev menu: open with #dev on the link, or on the title press up up down down left right left right B A ---------- */
-const STAGES=[['INTRO',()=>go(Intro)],['CUBICLE RUN',()=>go(Run)],['OBJECTIVE MAYHEM',()=>go(Brawl)],['PUDDING RUN',()=>go(Kitchen)],['DRIVE HOME',()=>go(DriveHome)],['LEADERSHIP MTG',()=>go(Meeting,()=>go(Dev))],['FRIDAY BOSS',()=>go(Boss)],['ENDING',()=>go(Ending)]];
+const STAGES=[['INTRO',()=>go(Intro)],['CUBICLE RUN',()=>go(Run)],['OBJECTIVE MAYHEM',()=>go(Brawl)],['PUDDING RUN',()=>go(Kitchen)],['DRIVE HOME',()=>go(DriveHome)],['LEADERSHIP MTG',()=>go(Meeting,()=>go(Dev))],['SCHEDULING',()=>go(Schedule)],['FRIDAY BOSS',()=>go(Boss)],['ENDING',()=>go(Ending)]];
 const Dev={
   sel:0,day:1,
   init(){G.dev=true;},
@@ -1636,8 +1753,8 @@ function loop(ts){
   render();
 }
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&scene!==Title)paused=true;});
-Title.music='title';Run.music='run';Brawl.music='brawl';Kitchen.music='kitchen';Boss.music='boss';Weekend.music='title';Upgrade.music='title';DriveHome.music='run';Meeting.music='kitchen';Ending.music='title';
-window.__cpm={step,go,keys,pressed,G,scenes:{Calendar,Weekend,Upgrade,Title,Intro,Run,Brawl,Kitchen,DriveHome,Meeting,Banner,Boss,Ending,Dev},get scene(){return scene}};
+Title.music='title';Run.music='run';Brawl.music='brawl';Kitchen.music='kitchen';Boss.music='boss';Weekend.music='title';Upgrade.music='title';DriveHome.music='run';Meeting.music='kitchen';Schedule.music='title';Ending.music='title';
+window.__cpm={step,go,keys,pressed,G,scenes:{Calendar,Weekend,Upgrade,Schedule,Title,Intro,Run,Brawl,Kitchen,DriveHome,Meeting,Banner,Boss,Ending,Dev},get scene(){return scene}};
 if(location.hash==='#dev')go(Dev);else go(Title);
 requestAnimationFrame(loop);
 })();
