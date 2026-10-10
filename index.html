@@ -453,7 +453,11 @@ const WALKER2=[...WALKER.slice(0,8),"..P..K..","..K....."];
 const FOODS={burger:BURGER,donut:DONUT,coffee:COFFEE,pudding:PUD,cosmic:DONUT};
 const Run={
   init(){this.need=2+Math.min(G.level,4);this.turns=0;this.en=100;this.inv=0;this.slow=0;this.sp=0;this.px=128;this.done=0;this.turnAnim=0;this.anim=0;this.ammo=3;this.cd=0;this.newSeg(0);},
-  newSeg(back){this.pd=0;this.back=back;this.final=this.turns>=this.need;this.J=Math.round(rnd(560,800))+(Math.min(G.level,5)-1)*90;this.signSeen=null;this.signRot=pick([Math.PI,Math.PI/2,-Math.PI/2]);this.correct=Math.random()<.5?-1:1;this.objs=[];this.shots=[];this.st=140;},
+  newSeg(back){this.pd=0;this.back=back;this.final=this.turns>=this.need;this.J=Math.round(rnd(560,800))+(Math.min(G.level,5)-1)*90;this.signSeen=null;{const lv=Math.min(G.level,5);
+    this.signX=lv<2?0:pick(lv<3?[0,-34,34]:[0,-34,34,-98,98]);   // middle, left, right, or over in a cubicle
+    this.signFade=lv>=3&&Math.random()<.65;
+    this.signFlip=lv>=4&&Math.random()<.5;
+    this.signRot=lv>=4?pick(lv>=5?[0,Math.PI,Math.PI/2,-Math.PI/2]:[0,0,Math.PI]):0;}this.correct=Math.random()<.5?-1:1;this.objs=[];this.shots=[];this.st=140;},
   endD(){return this.final?this.J+24:this.J+56;},
   open(d,side){if(!this.final&&d>=this.J-56&&d<=this.J+56)return true;return this.back===side&&d>=-56&&d<=56;},
   cellOpen(lo,hi,side){if(!this.final&&hi>this.J-62&&lo<this.J+62)return true;return this.back===side&&hi>-62&&lo<62;},
@@ -495,16 +499,16 @@ const Run={
       // the sign gets harder to read as the week goes on:
       // day 3 it fades away, day 4 it flips back and forth (mirrored half the time), day 5 it's rotated
       const sign=(cx,sy)=>{const lv=Math.min(G.level,5);let a=1;
-        if(lv>=3){if(this.signSeen==null&&sy>20&&sy<H-20)this.signSeen=frame;
+        if(this.signFade){if(this.signSeen==null&&sy>20&&sy<H-20)this.signSeen=frame;
           if(this.signSeen!=null)a=clamp(1-(frame-this.signSeen-[0,0,50,70,80][lv-1])/40,0,1);}
         if(a<=0)return;
         ctx.save();ctx.globalAlpha=a;ctx.translate(cx,sy+7);
-        if(lv===4){const c=Math.cos(frame*.07);ctx.scale(Math.abs(c)<.05?.05*Math.sign(c||1):c,1);}
-        if(lv>=5)ctx.rotate(this.signRot);
-        ctx.fillStyle='#0d0b14';ctx.fillRect(-60,-7,120,14);ctx.fillStyle='#ffd23f';ctx.fillRect(-59,-6,118,12);txt(lab,0,-4,'#0d0b14',8,'center',null);
+        if(this.signFlip){const c=Math.cos(frame*.07);ctx.scale(Math.abs(c)<.05?.05*Math.sign(c||1):c,1);}
+        if(this.signRot)ctx.rotate(this.signRot);
+        ctx.fillStyle='#0d0b14';ctx.fillRect(-27,-7,54,14);ctx.fillStyle='#ffd23f';ctx.fillRect(-26,-6,52,12);txt(lab,0,-4,'#0d0b14',8,'center',null);
         ctx.restore();};
       // one sign per hallway, mid-run. Nothing at the turn: you have to remember it.
-      sign(ox+128,Y(Math.round(this.J*[.45,.35,.27,.2,.16][Math.min(G.level,5)-1])));
+      sign(ox+128+this.signX,Y(Math.round(this.J*[.45,.35,.27,.2,.16][Math.min(G.level,5)-1])));
     }else{
       const dy=Y(end+6);
       ctx.fillStyle='#7a4a24';ctx.fillRect(ox+108,dy-22,40,28);ctx.fillStyle='#5a3418';ctx.fillRect(ox+112,dy-18,32,24);
@@ -611,7 +615,7 @@ const Brawl={
     this.common=[{x:0,y:24,w:8,h:200},{x:248,y:24,w:8,h:200},
       {x:24,y:92,w:56,h:8,p:1},{x:176,y:92,w:56,h:8,p:1},{x:24,y:148,w:56,h:8,p:1},{x:176,y:148,w:56,h:8,p:1},
       ];
-    this.brief={x:108,y:116,w:40,h:16,pow:1};this.lang=0;
+    this.brief={x:90,y:116,w:76,h:16,pow:1};
     this.floor={x:-32,y:224,w:320,h:16};this.ceil={x:-32,y:16,w:320,h:8};
     this.bumpers=[{x:52,y:124,hit:0},{x:204,y:124,hit:0}];
     this.p1=this.mkP(40,200,1,false);this.p2=this.mkP(200,200,-1,true);
@@ -629,17 +633,18 @@ const Brawl={
     b.y+=b.vy;for(const s of S)if(ov(b,s)){if(b.vy>0){b.y=s.y-b.h;b.hy=1;}else{b.y=s.y+s.h;b.hy=-1;}b.hs=s;}
   },
   flip(){
+    this.patWait=Math.max(40,170-Math.min(G.level,5)*25);   // Pat needs a moment to notice
     if(G.level>=3)G.trip=Math.max(G.trip,90);
     this.gd*=-1;this.cd=90;G.shake=14;SFX.pow();
     pop(128,80,this.gd<0?'EVERYTHING FALLS UP!':'EVERYTHING FALLS DOWN!','#ff7eb6');
   },
   moveBrief(){
     // one brief at a time: it jumps somewhere new (reachable under the new gravity) and changes language
-    const spots=this.gd>0?[[108,116],[108,180],[28,184],[188,184]]:[[108,52],[108,116],[28,48],[188,48]];
-    const opts=spots.filter(([x,y])=>!(x===this.brief.x&&y===this.brief.y)).map(([x,y])=>({x,y,w:40,h:16,pow:1})).filter(b=>!ov(b,this.p1)&&!ov(b,this.p2)&&!this.balls.some(q=>ov(b,q)));
+    const spots=this.gd>0?[[90,116],[90,180],[12,184],[168,184]]:[[90,52],[90,116],[12,48],[168,48]];
+    const opts=spots.filter(([x,y])=>!(x===this.brief.x&&y===this.brief.y)).map(([x,y])=>({x,y,w:76,h:16,pow:1})).filter(b=>!ov(b,this.p1)&&!ov(b,this.p2)&&!this.balls.some(q=>ov(b,q)));
     if(!opts.length)return;
-    this.brief=pick(opts);this.brief.pop=20;this.lang=(this.lang+1)%BRIEF_LANG.length;
-    pop(this.brief.x+20,this.brief.y-10,'BRIEF: NOW IN '+BRIEF_LANG[this.lang][1],'#ffd23f');
+    this.brief=pick(opts);this.brief.pop=20;
+    pop(this.brief.x+38,this.brief.y-10,'THE BRIEF FLIPPED!','#ffd23f');
   },
   bump(p,s,o){
     SFX.bump();
@@ -667,8 +672,11 @@ const Brawl={
     if(--p.think<=0){p.think=30;p.lazy=Math.random()<Math.max(.05,.35-.07*G.level);}
     if(p.lazy)return[0,0,0,0,0];
     // gravity points at the red goal: get to a POW and flip it back
-    if(gd<0&&this.cd===0){
-      const bx=this.brief.x+20;p.briefT=(p.briefT||0)+1;
+    if(this.patWait>0)this.patWait--;
+    if(gd<0&&this.cd===0&&!(this.patWait>0)){
+      const bx=this.brief.x+38,br=this.brief;p.briefT=(p.briefT||0)+1;if(p.briefT>420)p.briefT=0;
+      // standing on the brief itself? you can't bump it from there, so walk off the edge first
+      if(p.gr&&p.x+p.w>br.x&&p.x<br.x+br.w&&Math.abs(p.y-(br.y+br.h))<2){const left=pcx-br.x<br.x+br.w-pcx;return[left,!left,0,0,0];}
       if(p.briefT<240){let J=0;if(p.gr&&Math.abs(pcx-bx)<10&&Math.random()<.25)J=1;
       if(p.gr&&p.hx&&Math.random()<.2)J=1;
       return[pcx>bx+3,pcx<bx-3,J,0,0];}
@@ -688,7 +696,7 @@ const Brawl={
     if(Math.abs(bcx-pcx)<22&&Math.abs(bcy-pcy)<22&&p.kcd===0&&Math.random()<.06+.03*Math.min(G.level,5)){
       p.f=d;L=R=false;K=1;aim=gd>0?1:0;}
     // gravity already favors red: don't bump the brief by accident
-    if(gd>0&&Math.abs(pcx-(this.brief.x+20))<30)J=0;
+    if(gd>0&&Math.abs(pcx-(this.brief.x+38))<46)J=0;
     return[L,R,J,K,aim];
   },
   updP(p,o){
@@ -775,10 +783,10 @@ const Brawl={
       else this.drawBricks(s,'#7a4a24','#4a2a12');
     }
     {const s=this.brief,ready=this.cd===0;if(s.pop)s.pop--;
-      if(s.pop){ctx.fillStyle='#ffd23f';for(let i=0;i<8;i++){const a=i/8*6.283,r=26-s.pop;ctx.fillRect(s.x+20+Math.cos(a)*r,s.y+8+Math.sin(a)*r,2,2);}}
+      if(s.pop){ctx.fillStyle='#ffd23f';for(let i=0;i<8;i++){const a=i/8*6.283,r=26-s.pop;ctx.fillRect(s.x+38+Math.cos(a)*r*1.6,s.y+8+Math.sin(a)*r,2,2);}}
       ctx.fillStyle=ready?'#f4f4f4':'#6e6888';ctx.fillRect(s.x,s.y,s.w,s.h);
       ctx.fillStyle=ready?'#c9c4b5':'#45405c';ctx.fillRect(s.x+s.w-6,s.y,6,6);ctx.fillRect(s.x,s.y+s.h-2,s.w,2);
-      txt(BRIEF_LANG[this.lang][0],s.x+20,s.y+4,ready?((frame>>4)%2?'#e8433a':'#0d0b14'):'#45405c',8,'center',null);}
+      ctx.save();ctx.translate(s.x+38,s.y+8);if(this.gd<0)ctx.rotate(Math.PI);txt('THE BRIEF',0,-4,ready?((frame>>4)%2?'#e8433a':'#0d0b14'):'#45405c',8,'center',null);ctx.restore();}
     for(const u of this.bumpers){ctx.fillStyle=u.hit?'#ffffff':'#ff7eb6';ctx.beginPath();ctx.arc(u.x,u.y,8,0,7);ctx.fill();ctx.fillStyle='#0d0b14';ctx.beginPath();ctx.arc(u.x,u.y,3,0,7);ctx.fill();}
     for(const b of this.balls){const cx=b.x+6,cy=b.y+6;
       if(Math.abs(b.spin)>.3){ctx.fillStyle='#ff7eb6';ctx.fillRect(cx-b.vx*2-1,cy-b.vy*2-1,2,2);ctx.fillRect(cx-b.vx*3.5-1,cy-b.vy*3.5-1,2,2);}
@@ -922,7 +930,6 @@ const Kitchen={
   }
 };
 
-const BRIEF_LANG=[['BRIEF','ENGLISH'],['BREF','FRENCH'],['KURZ','GERMAN'],['SUNTO','ITALIAN'],['FEIRB','BACKWARDS'],['BREVE','SPANISH']];
 // the red stapler: shows up late in the week and chases you
 function drawStapler(x,y,s=1){
   const open=(frame>>3)%2;x=Math.round(x);y=Math.round(y);
@@ -945,7 +952,7 @@ const DriveHome={
   top(){return(this.nitro>0?9:6)*(1+G.mood*.06);},
   spawn(){
     const d=this.dist+H+30,c=this.center(d),h=this.half(d),r=Math.random();
-    let type=r<.3?'car':r<.4?'oil':r<.62?'boost':r<.88?'coffee':'paper';
+    let type=r<.26?'car':r<.34?'oil':r<.48?'boost':r<.9?'coffee':'paper';
     if(G.level>=3&&Math.random()<.04)type='stapler';
     this.objs.push({type,d,x:c+rnd(-1,1)*(h-14),vs:type==='car'?rnd(2.5,4.5):0,
       col:pick(['#9b59d0','#e08b2f','#3fb1a0','#c9c4b5','#5bc248']),vx:type==='paper'?pick([-1.6,1.6]):type==='stapler'?pick([-2.4,2.4]):0});
@@ -956,7 +963,7 @@ const DriveHome={
     if(o.type==='car'){if(this.inv)return;this.sp*=.55;this.inv=45;G.shake=10;SFX.hit();this.x+=this.x<o.x?-6:6;pop(o.x,y,pick(['CRUNCH!','HONK!','WATCH IT!']),'#ff7eb6');}
     else if(o.type==='oil'){o.dead=1;this.spin=90;SFX.whoosh();pop(o.x,y,'OIL SLICK!','#8fe3ff');}
     else if(o.type==='boost'){if(o.used)return;o.used=1;this.sp=Math.max(this.sp,this.top()+1.5);SFX.spawn();pop(o.x,y,'BOOST!','#ffd23f');}
-    else if(o.type==='coffee'){o.dead=1;this.nitro=180;SFX.rush();pop(o.x,y,'NITRO COFFEE!','#f08a24');}
+    else if(o.type==='coffee'){o.dead=1;this.nitro=180;mood(.12);SFX.rush();pop(o.x,y,'NITRO COFFEE!','#f08a24');}
     else if(o.type==='stapler'){if(this.inv)return;o.dead=1;this.sp*=.5;this.inv=40;SFX.hit();G.shake=8;pop(o.x,y,'CHOMP!','#e8433a');}
     else if(o.type==='paper'){o.dead=1;this.sp*=.6;SFX.paper();mood(-.06);pop(o.x,y,'WORKFRONT!','#f4f4f4');}
   },
